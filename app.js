@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const STORAGE = 'assistant-phone-v3-state';
+  const STORAGE = 'assistant-phone-v4-minimal-state';
   const $ = (id) => document.getElementById(id);
   const qs = (sel, root = document) => root.querySelector(sel);
   const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -48,7 +48,7 @@
       { id:'other', name:'Otros', icon:'📦', color:'#f472b6', budget:250 }
     ];
     return {
-      settings:{ onboarded:false, userName:'Byron', assistantName:'Jarvis', accent:'#7c5cfc', theme:'auto', density:'comfortable', mode:'simple', currency:'USD', pinEnabled:false, privacyMode:false, profile:'Personal', homeLayout:'cards' },
+      settings:{ onboarded:false, userName:'Byron', assistantName:'Jarvis', accent:'#7c5cfc', theme:'auto', density:'comfortable', mode:'simple', currency:'USD', pinEnabled:false, privacyMode:false, profile:'Personal', homeLayout:'minimal', showMonthCalendar:false },
       projects:[
         {id:'personal', name:'Personal', icon:'🌱', color:'#00d68f', profile:'Personal'},
         {id:'work', name:'Trabajo', icon:'💼', color:'#38bdf8', profile:'Trabajo'},
@@ -57,36 +57,16 @@
         {id:'home', name:'Hogar', icon:'🏠', color:'#ffb340', profile:'Personal'}
       ],
       categories,
-      tasks:[
-        {id:uid('task'),title:'Revisar correos importantes',note:'Responder al cliente prioritario',priority:'alta',project:'work',due:t,estimate:25,reminder:'09:00',repeat:'never',status:'doing',private:false,done:false,createdAt:t,completedAt:null,xpAwarded:false,subtasks:[{id:uid('sub'),text:'Filtrar urgentes',done:false},{id:uid('sub'),text:'Responder pendientes',done:false}]},
-        {id:uid('task'),title:'Llamar al médico',note:'Confirmar cita',priority:'alta',project:'health',due:addDays(1),estimate:15,reminder:'11:00',repeat:'never',status:'todo',private:false,done:false,createdAt:t,completedAt:null,xpAwarded:false,subtasks:[]},
-        {id:uid('task'),title:'Preparar presentación',note:'Incluir métricas y próximos pasos',priority:'alta',project:'work',due:addDays(-1),estimate:90,reminder:'',repeat:'never',status:'doing',private:false,done:false,createdAt:addDays(-2),completedAt:null,xpAwarded:false,subtasks:[{id:uid('sub'),text:'Recolectar métricas',done:true},{id:uid('sub'),text:'Diseñar slides',done:false}]},
-        {id:uid('task'),title:'Leer 20 minutos',note:'',priority:'baja',project:'personal',due:t,estimate:20,reminder:'20:00',repeat:'daily',status:'done',private:false,done:true,createdAt:addDays(-1),completedAt:t,xpAwarded:true,subtasks:[]},
-        {id:uid('task'),title:'Revisar presupuesto mensual',note:'',priority:'media',project:'money',due:addDays(3),estimate:35,reminder:'',repeat:'monthly',status:'todo',private:true,done:false,createdAt:t,completedAt:null,xpAwarded:false,subtasks:[]}
-      ],
-      events:[
-        {id:uid('event'),title:'Reunión de equipo',location:'Online',date:t,start:'09:00',end:'10:00',color:'#38bdf8'},
-        {id:uid('event'),title:'Yoga / ejercicio',location:'Parque',date:addDays(1),start:'07:30',end:'08:20',color:'#00d68f'},
-        {id:uid('event'),title:'Cena familiar',location:'Casa',date:addDays(4),start:'20:00',end:'22:00',color:'#9b7ffe'}
-      ],
-      transactions:[
-        {id:uid('fin'),desc:'Salario mensual',amount:3200,type:'income',cat:'other',date:addDays(-5)},
-        {id:uid('fin'),desc:'Supermercado',amount:85,type:'expense',cat:'food',date:t},
-        {id:uid('fin'),desc:'Gasolina',amount:60,type:'expense',cat:'transport',date:addDays(-1)},
-        {id:uid('fin'),desc:'Farmacia',amount:40,type:'expense',cat:'health',date:addDays(-2)}
-      ],
-      habits:[
-        {id:'read',name:'Leer',icon:'📚',goal:1,unit:'vez',color:'#38bdf8',log:{}},
-        {id:'water',name:'Agua',icon:'💧',goal:8,unit:'vasos',color:'#7c5cfc',log:{}},
-        {id:'exercise',name:'Ejercicio',icon:'💪',goal:1,unit:'sesión',color:'#00d68f',log:{}},
-        {id:'meditate',name:'Respirar / meditar',icon:'🧘',goal:1,unit:'vez',color:'#9b7ffe',log:{}}
-      ],
+      tasks:[],
+      events:[],
+      transactions:[],
+      habits:[],
       moods:{},
       notifications:[],
       chat:[{role:'ai',text:'Hola, soy tu asistente local. Puedo crear tareas, planificar tu día, registrar gastos y sugerirte qué hacer primero.',time:nowTime(),actions:[{label:'Plan del día',action:'assistant:plan'},{label:'Qué hago primero',action:'assistant:first'}]}],
       undo:null,
-      xp:1240,
-      streak:7,
+      xp:0,
+      streak:0,
       pom:{seconds:1500,total:1500,running:false,mode:'work',sessions:0},
       view:'home',
       taskFilter:'all',projectFilter:'all',calendar:{year:new Date().getFullYear(),month:new Date().getMonth(),selected:t}
@@ -165,10 +145,10 @@
 
   function getViews() {
     const base = [
-      {id:'home',label:'Inicio',icon:'🏠',sub:'Tu centro de mando diario'},
-      {id:'today',label:'Hoy',icon:'☀️',sub:'Plan, tareas, eventos y hábitos'},
-      {id:'tasks',label:'Tareas',icon:'✅',sub:'Pendientes, proyectos y reprogramación'},
-      {id:'calendar',label:'Calendario',icon:'📅',sub:'Eventos y fechas importantes'},
+      {id:'home',label:'Inicio',icon:'🏠',sub:'Simple y limpio'},
+      {id:'today',label:'Hoy',icon:'☀️',sub:'Lo necesario para hoy'},
+      {id:'tasks',label:'Tareas',icon:'✅',sub:'Lista simple'},
+      {id:'calendar',label:'Calendario',icon:'📅',sub:'Agenda primero'},
       {id:'assistant',label:state.settings.assistantName,icon:'🤖',sub:'Asistente local sin API'},
       {id:'settings',label:'Config',icon:'⚙️',sub:'Personalización, backup e instalación'}
     ];
@@ -216,68 +196,84 @@
     return 'Modo noche';
   }
 
-  function renderHome() {
-    const overdue = pendingTasks().filter(isOverdue).length;
+  function hasAnyData() {
+    return state.tasks.length || state.events.length || state.habits.length || state.transactions.length;
+  }
+  function dashboardSummaryText() {
+    const parts = [];
     const todayTasks = pendingTasks().filter(t => t.due === today()).length;
-    const todaysEvents = state.events.filter(e => e.date === today()).length;
-    const next = recommendTask();
-    const budgetPct = budgetMonth() ? Math.round(expenseMonth() / budgetMonth() * 100) : 0;
-    const notifs = buildNotifications().slice(0,4);
-    return `
-      <section class="card hero">
-        <h2 class="heroTitle">${greeting()}, ${esc(state.settings.userName)}</h2>
-        <p class="heroText">${currentBackgroundHint()} · ${pendingTasks().length} tareas pendientes · ${todaysEvents} eventos hoy · ${habitsDoneToday()}/${state.habits.length} hábitos.</p>
-        <div class="row wrap">
-          <button class="btn primary" data-action="start-day" type="button">Empezar mi día</button>
-          <button class="btn ghost" data-action="open-quick" type="button">＋ Acción rápida</button>
-          <button class="btn ghost" data-action="open-search" type="button">⌕ Buscar</button>
-        </div>
-      </section>
-
-      <section class="grid four" style="margin-top:var(--space)">
-        <div class="card kpi"><span>Vencidas</span><strong class="${overdue?'':'muted'}">${overdue}</strong></div>
-        <div class="card kpi"><span>Hoy</span><strong>${todayTasks}</strong></div>
-        <div class="card kpi"><span>Racha</span><strong>🔥${state.streak}</strong></div>
-        <div class="card kpi"><span>Disponible/día</span><strong>${money(Math.max(0,dailyAvailable()), {private:true})}</strong></div>
-      </section>
-
-      <section class="grid two" style="margin-top:var(--space)">
-        <div class="card">
-          <div class="between"><h3 class="sectionTitle">Siguiente tarea</h3><button class="chip" data-view="tasks" type="button">Ver tareas</button></div>
-          ${next ? renderTaskMini(next, true) : `<div class="empty">🎉 No hay tareas pendientes. ¿Quieres crear una?</div>`}
-          ${next ? `<div class="row wrap" style="margin-top:12px"><button class="btn primary" data-action="focus-task" data-id="${next.id}">Enfocarme</button><button class="btn ghost" data-action="postpone" data-id="${next.id}" data-days="1">Posponer a mañana</button></div>` : `<button class="btn primary full" data-action="new-task">＋ Nueva tarea</button>`}
-        </div>
-        <div class="card">
-          <div class="between"><h3 class="sectionTitle">Centro de notificaciones</h3><button class="chip" data-action="clear-notifs" type="button">Limpiar</button></div>
-          ${notifs.length ? notifs.map(renderNotification).join('') : `<div class="empty">✨ Todo tranquilo por ahora.</div>`}
-        </div>
-      </section>
-
-      <section class="grid three" style="margin-top:var(--space)">
-        <button class="card actionTile" data-action="new-task"><span>✅</span><strong>Nueva tarea</strong><small class="muted">Captura rápida</small></button>
-        <button class="card actionTile" data-action="new-event"><span>📅</span><strong>Nuevo evento</strong><small class="muted">Agenda algo</small></button>
-        <button class="card actionTile" data-view="assistant"><span>🤖</span><strong>Asistente</strong><small class="muted">Planifica o pregunta</small></button>
-      </section>
-
-      <section class="grid two" style="margin-top:var(--space)">
-        <div class="card">
-          <h3 class="sectionTitle">Widgets</h3>
-          <div class="stack">
-            <div class="between"><span>📅 Próximo evento</span><strong>${esc(nextEventLabel())}</strong></div>
-            <div class="between"><span>💰 Presupuesto usado</span><strong>${budgetPct}%</strong></div>
-            <div class="bar"><div class="fill" style="width:${clamp(budgetPct,0,100)}%"></div></div>
-            <div class="between"><span>🌱 Hábitos de hoy</span><strong>${habitsDoneToday()}/${state.habits.length}</strong></div>
-          </div>
-        </div>
-        <div class="card">
-          <h3 class="sectionTitle">Ayuda rápida</h3>
-          <div class="helpBox">
-            Prueba escribir en el asistente: <br><strong>“crea tarea mañana llamar al médico”</strong><br><strong>“qué puedo hacer en 15 minutos”</strong><br><strong>“registrar gasto 20 comida”</strong>
-          </div>
-        </div>
-      </section>`;
+    const todayEvents = state.events.filter(e => e.date === today()).length;
+    const habitsPending = state.habits.filter(h => Number(h.log[today()] || 0) < Number(h.goal || 1)).length;
+    if (todayTasks) parts.push(`${todayTasks} tarea${todayTasks===1?'':'s'} para hoy`);
+    if (todayEvents) parts.push(`${todayEvents} evento${todayEvents===1?'':'s'}`);
+    if (habitsPending) parts.push(`${habitsPending} hábito${habitsPending===1?'':'s'} pendiente${habitsPending===1?'':'s'}`);
+    return parts.length ? parts.join(' · ') : 'Tu día está limpio.';
+  }
+  function renderAddStrip(title='Agregar algo') {
+    return `<section class="addStrip softAdd" aria-label="Acciones rápidas">
+      <div><strong>${esc(title)}</strong><span>Una acción a la vez. Puedes añadir más después.</span></div>
+      <div class="addChoices">
+        <button class="btn primary" data-action="new-task" type="button">＋ Tarea</button>
+        <button class="btn ghost" data-action="new-event" type="button">Evento</button>
+        <button class="btn ghost" data-action="new-habit" type="button">Hábito</button>
+        <button class="btn ghost" data-action="new-finance" type="button">Gasto</button>
+      </div>
+    </section>`;
+  }
+  function renderEmptyClean(icon, title, text, action='new-task', label='Agregar tarea') {
+    return `<section class="emptyClean">
+      <div class="emptyIcon">${icon}</div>
+      <h2>${esc(title)}</h2>
+      <p>${esc(text)}</p>
+      <button class="btn primary" data-action="${action}" type="button">${esc(label)}</button>
+    </section>`;
+  }
+  function renderSimpleMetric(label, value) {
+    return `<div class="simpleMetric"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
   }
 
+  function renderHome() {
+    const any = hasAnyData();
+    const next = recommendTask();
+    const eventsToday = state.events.filter(e => e.date === today()).sort((a,b)=>a.start.localeCompare(b.start));
+    const tasksToday = pendingTasks().filter(t => t.due === today()).sort(sortTasks);
+    const overdue = pendingTasks().filter(isOverdue);
+    const firstEvent = eventsToday[0];
+    if (!any) {
+      return `
+        <section class="minimalHero">
+          <div class="heroSmall">${esc(currentBackgroundHint())}</div>
+          <h2>${greeting()}, ${esc(state.settings.userName)}</h2>
+          <p>Tu espacio está limpio. Empieza con una sola acción.</p>
+          <button class="btn primary" data-action="open-quick" type="button">＋ Agregar algo</button>
+        </section>
+        ${renderAddStrip('También puedes agregar')}
+        <section class="hintLine">
+          <strong>Tip:</strong> Mantén tu inicio simple. Las secciones aparecen solo cuando aportan algo.
+        </section>`;
+    }
+    const cards = [];
+    if (overdue.length) cards.push(`<section class="subtleCard attention"><div><strong>${overdue.length} vencida${overdue.length===1?'':'s'}</strong><span>Conviene reprogramar o resolver.</span></div><button class="chip danger" data-action="move-overdue" type="button">Mover a mañana</button></section>`);
+    if (next) cards.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Siguiente</h3><button class="chip" data-view="tasks" type="button">Tareas</button></div>${renderTaskMini(next,true)}</section>`);
+    if (firstEvent) cards.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Próximo evento</h3><button class="chip" data-view="calendar" type="button">Calendario</button></div>${renderEventMini(firstEvent)}</section>`);
+    const todayBits = [];
+    if (tasksToday.length) todayBits.push(renderSimpleMetric('Tareas hoy', String(tasksToday.length)));
+    if (eventsToday.length) todayBits.push(renderSimpleMetric('Eventos', String(eventsToday.length)));
+    if (state.habits.length) todayBits.push(renderSimpleMetric('Hábitos', `${habitsDoneToday()}/${state.habits.length}`));
+    return `
+      <section class="minimalHero">
+        <div class="heroSmall">${esc(currentBackgroundHint())}</div>
+        <h2>${greeting()}, ${esc(state.settings.userName)}</h2>
+        <p>${esc(dashboardSummaryText())}</p>
+        <div class="row wrap">
+          <button class="btn primary" data-action="open-quick" type="button">＋ Agregar</button>
+          <button class="btn ghost" data-view="today" type="button">Ver hoy</button>
+        </div>
+      </section>
+      ${todayBits.length ? `<section class="simpleMetrics">${todayBits.join('')}</section>` : ''}
+      <div class="linearStack">${cards.join('')}</div>
+      ${renderAddStrip('Agregar más')}`;
+  }
   function nextEventLabel() {
     const upcoming = [...state.events].filter(e => e.date >= today()).sort((a,b)=>`${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`))[0];
     return upcoming ? `${upcoming.start} ${upcoming.title}` : 'Sin eventos';
@@ -302,43 +298,70 @@
   function renderTaskMini(t, showProject=false) {
     const p = project(t.project);
     const cls = `${t.priority==='alta'&&!t.done?' urgent':''}${t.done?' done':''}${state.settings.privacyMode&&t.private?' privateHidden':''}`;
-    return `<div class="task${cls}">
+    const meta = [];
+    if (t.due) meta.push(fmtDate(t.due));
+    if (t.priority && t.priority !== 'media') meta.push(t.priority);
+    return `<article class="task simpleTask touchTask${cls}">
       <button class="check ${t.done?'done':''}" data-action="toggle-task" data-id="${t.id}" aria-label="Completar tarea">${t.done?'✓':''}</button>
-      <div class="privateText">
-        <div class="taskName">${t.private?'🔒 ':''}${esc(t.title)}</div>
-        ${t.note?`<div class="muted small">${esc(t.note)}</div>`:''}
-        <div class="taskMeta">
-          <span class="tag ${t.priority==='alta'?'danger':t.priority==='media'?'warn':'ok'}">${t.priority}</span>
-          ${t.due?`<span class="tag ${isOverdue(t)?'danger':'info'}">${fmtDate(t.due)}</span>`:''}
-          ${t.estimate?`<span class="tag">⏱ ${t.estimate}m</span>`:''}
-          ${showProject?`<span class="tag" style="color:${p.color}">${p.icon} ${esc(p.name)}</span>`:''}
-        </div>
-        ${t.subtasks?.length ? `<div class="subtasks">${t.subtasks.map(s=>`<div class="subtask ${s.done?'done':''}"><button data-action="toggle-subtask" data-task="${t.id}" data-id="${s.id}" type="button"></button>${esc(s.text)}</div>`).join('')}</div>`:''}
-      </div>
-      <div class="miniBtns"><button data-action="edit-task" data-id="${t.id}" title="Editar">✎</button><button data-action="postpone" data-id="${t.id}" data-days="1" title="Posponer">⏭</button><button data-action="delete-task" data-id="${t.id}" title="Eliminar">🗑</button></div>
-    </div>`;
+      <button class="taskMain privateText" data-action="task-detail" data-id="${t.id}" type="button" aria-label="Ver detalles de ${esc(t.title)}">
+        <span class="taskTitle">${t.private?'🔒 ':''}${esc(t.title)}</span>
+        <span class="taskSub">${meta.length?esc(meta.join(' · ')):'Sin fecha'}</span>
+      </button>
+      <button class="taskMore" data-action="task-detail" data-id="${t.id}" type="button" aria-label="Más opciones">›</button>
+    </article>`;
   }
 
+  function renderTaskDetail(t) {
+    const p = project(t.project);
+    const subtasks = t.subtasks?.length ? `<div class="detailBlock"><h4>Subtareas</h4>${t.subtasks.map(s=>`<div class="subtask ${s.done?'done':''}"><button data-action="toggle-subtask" data-task="${t.id}" data-id="${s.id}" type="button"></button>${esc(s.text)}</div>`).join('')}</div>` : '';
+    const note = t.note ? `<div class="detailBlock"><h4>Nota</h4><p>${esc(t.note)}</p></div>` : '';
+    return `<div class="detailHeader">
+        <div><p class="eyebrow">Tarea</p><h2 id="task-detail-title">${t.private?'🔒 ':''}${esc(t.title)}</h2></div>
+        <button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div class="detailMeta">
+        <span>${esc(fmtDate(t.due))}</span>
+        <span>${esc(t.priority)}</span>
+        ${t.estimate?`<span>${t.estimate} min</span>`:''}
+        <span style="color:${p.color}">${p.icon} ${esc(p.name)}</span>
+      </div>
+      ${note}
+      ${subtasks}
+      <div class="detailActions">
+        <button class="btn primary" data-action="toggle-task" data-id="${t.id}" type="button">${t.done?'Reabrir':'Completar'}</button>
+        <button class="btn ghost" data-action="postpone" data-id="${t.id}" data-days="1" type="button">Mañana</button>
+        <button class="btn ghost" data-action="edit-task" data-id="${t.id}" type="button">Editar</button>
+        <button class="btn danger" data-action="delete-task" data-id="${t.id}" type="button">Eliminar</button>
+      </div>`;
+  }
+
+  function openTaskDetail(id) {
+    const t = state.tasks.find(x=>x.id===id);
+    if (!t) return;
+    $('task-detail-content').innerHTML = renderTaskDetail(t);
+    openModal('task-detail-modal');
+  }
+
+
   function renderToday() {
-    const plan = generateDayPlan();
     const overdue = pendingTasks().filter(isOverdue);
     const todayList = pendingTasks().filter(t=>t.due===today()).sort(sortTasks);
     const events = state.events.filter(e=>e.date===today()).sort((a,b)=>a.start.localeCompare(b.start));
-    return `
-      <div class="grid two">
-        <section class="card hero"><h2 class="heroTitle">Plan del día</h2><p class="heroText">Ordenado por horario, urgencia y duración.</p><div class="row wrap"><button class="btn primary" data-action="assistant-plan">Generar resumen</button><button class="btn ghost" data-action="move-overdue">Mover vencidas a mañana</button></div></section>
-        <section class="card"><h3 class="sectionTitle">Ánimo y energía</h3><div class="row wrap">${['😢','😕','😐','🙂','😄'].map((m,i)=>`<button class="moodBtn ${state.moods[today()]===i?'on':''}" data-action="set-mood" data-mood="${i}">${m}</button>`).join('')}</div><p class="muted small">Esto ayuda a relacionar ánimo con productividad.</p></section>
-      </div>
-      <section class="card" style="margin-top:var(--space)"><h3 class="sectionTitle">Horario recomendado</h3>${plan.length?plan.map(x=>`<div class="planItem"><div class="timeBadge">${esc(x.time)}</div><div><strong>${esc(x.title)}</strong><div class="muted small">${esc(x.meta)}</div></div></div>`).join(''):`<div class="empty">No hay nada programado. Puedes crear una rutina o tarea.</div>`}</section>
-      <section class="grid two" style="margin-top:var(--space)">
-        <div class="card"><div class="between"><h3 class="sectionTitle">Tareas de hoy</h3><button class="chip" data-action="new-task">＋</button></div>${todayList.length?todayList.map(t=>renderTaskMini(t,true)).join(''):`<div class="empty">✨ No tienes tareas para hoy.<br><button class="btn primary" data-action="new-task">Planear una tarea</button></div>`}</div>
-        <div class="card"><div class="between"><h3 class="sectionTitle">Eventos de hoy</h3><button class="chip" data-action="new-event">＋</button></div>${events.length?events.map(renderEventMini).join(''):`<div class="empty">📅 Sin eventos hoy.</div>`}</div>
-      </section>
-      <section class="grid two" style="margin-top:var(--space)">
-        <div class="card"><h3 class="sectionTitle">Vencidas</h3>${overdue.length?overdue.map(t=>renderTaskMini(t,true)).join(''):`<div class="empty">Sin tareas vencidas. Bien hecho.</div>`}</div>
-        <div class="card"><h3 class="sectionTitle">Tengo...</h3><div class="row wrap"><button class="btn ghost" data-action="time-filter" data-min="5">5 min</button><button class="btn ghost" data-action="time-filter" data-min="15">15 min</button><button class="btn ghost" data-action="time-filter" data-min="30">30 min</button><button class="btn ghost" data-action="time-filter" data-min="60">1 hora</button></div><div id="time-suggestions" style="margin-top:12px"></div></div>
-      </section>
-      <section class="card" style="margin-top:var(--space)"><h3 class="sectionTitle">Rutinas</h3><div class="grid three"><button class="actionTile" data-action="routine" data-name="mañana"><span>🌅</span><strong>Rutina mañana</strong></button><button class="actionTile" data-action="routine" data-name="trabajo"><span>💼</span><strong>Rutina trabajo</strong></button><button class="actionTile" data-action="routine" data-name="noche"><span>🌙</span><strong>Rutina noche</strong></button></div></section>`;
+    const habits = state.habits.filter(h => Number(h.log[today()] || 0) < Number(h.goal || 1));
+    const hasToday = overdue.length || todayList.length || events.length || habits.length;
+    if (!hasAnyData()) {
+      return `${renderEmptyClean('☀️','Hoy está vacío','Agrega una tarea o evento para empezar a construir tu día.','new-task','Crear tarea')}${renderAddStrip('Planear hoy')}`;
+    }
+    if (!hasToday) {
+      return `${renderEmptyClean('✨','Nada pendiente hoy','No tienes tareas, eventos ni hábitos pendientes para hoy.','open-quick','Agregar algo')}${renderAddStrip('Agregar para hoy')}`;
+    }
+    const sections = [];
+    if (overdue.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Vencidas</h3><button class="chip danger" data-action="move-overdue" type="button">Mover a mañana</button></div><div class="stack">${overdue.map(t=>renderTaskMini(t,true)).join('')}</div></section>`);
+    if (todayList.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Tareas de hoy</h3><button class="chip" data-action="new-task" type="button">＋</button></div><div class="stack">${todayList.map(t=>renderTaskMini(t,true)).join('')}</div></section>`);
+    if (events.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Agenda</h3><button class="chip" data-action="new-event" data-date="${today()}" type="button">＋</button></div><div class="agendaList">${events.map(renderEventMini).join('')}</div></section>`);
+    if (habits.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Hábitos</h3><button class="chip" data-action="new-habit" type="button">＋</button></div><div class="simpleHabitList">${habits.map(h=>`<div class="simpleHabit"><span>${h.icon} ${esc(h.name)}</span><button class="chip" data-action="habit-inc" data-id="${h.id}" type="button">Marcar</button></div>`).join('')}</div></section>`);
+    const quickTime = pendingTasks().length ? `<section class="card cleanCard"><h3 class="sectionTitle">Tengo tiempo para...</h3><div class="row wrap"><button class="btn ghost" data-action="time-filter" data-min="5">5 min</button><button class="btn ghost" data-action="time-filter" data-min="15">15 min</button><button class="btn ghost" data-action="time-filter" data-min="30">30 min</button><button class="btn ghost" data-action="time-filter" data-min="60">1 hora</button></div><div id="time-suggestions" style="margin-top:12px"></div></section>` : '';
+    return `<section class="pageIntro"><h2>Hoy</h2><p>${esc(dashboardSummaryText())}</p></section><div class="linearStack">${sections.join('')}${quickTime}</div>${renderAddStrip('Agregar al día')}`;
   }
   function generateDayPlan() {
     const items = [];
@@ -351,7 +374,20 @@
     state.habits.filter(h=>Number(h.log[today()]||0) < h.goal).slice(0,3).forEach(h=>items.push({time:'Hoy',title:`${h.icon} ${h.name}`,meta:`Hábito · meta ${h.goal} ${h.unit}`}));
     return items.sort((a,b)=>a.time.localeCompare(b.time));
   }
-  function renderEventMini(e) { return `<div class="eventItem"><div class="row"><span class="dot" style="background:${e.color}"></span><div><strong>${esc(e.title)}</strong><div class="muted small">${e.start}–${e.end}${e.location?' · '+esc(e.location):''}</div></div></div></div>`; }
+  function renderEventMini(e) { return `<button class="eventItem eventButton" data-action="event-detail" data-id="${e.id}" type="button"><span class="dot" style="background:${e.color}"></span><span><strong>${esc(e.title)}</strong><small>${e.start}–${e.end}${e.location?' · '+esc(e.location):''}</small></span><b>›</b></button>`; }
+
+  function renderEventDetail(e) {
+    return `<div class="detailHeader"><div><p class="eyebrow">Evento</p><h2 id="event-detail-title">${esc(e.title)}</h2></div><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <div class="detailMeta"><span>${esc(fmtLongDate(e.date))}</span><span>${esc(e.start)}–${esc(e.end)}</span>${e.location?`<span>📍 ${esc(e.location)}</span>`:''}</div>
+      <div class="detailActions"><button class="btn primary" data-action="edit-event" data-id="${e.id}" type="button">Editar</button><button class="btn danger" data-action="delete-event" data-id="${e.id}" type="button">Eliminar</button></div>`;
+  }
+
+  function openEventDetail(id) {
+    const e = state.events.find(x=>x.id===id);
+    if (!e) return;
+    $('event-detail-content').innerHTML = renderEventDetail(e);
+    openModal('event-detail-modal');
+  }
   function sortTasks(a,b) {
     const pr = {alta:0,media:1,baja:2};
     if (a.done !== b.done) return a.done ? 1 : -1;
@@ -383,26 +419,45 @@
     if (filter === 'done') list = list.filter(t=>t.done);
     if (filter === 'private') list = list.filter(t=>t.private);
     list = list.sort(sortTasks);
-    return `<div class="chipRow"><button class="chip ${state.projectFilter==='all'?'on':''}" data-project="all">📋 Todos</button>${state.projects.map(p=>`<button class="chip ${state.projectFilter===p.id?'on':''}" data-project="${p.id}" style="--accent:${p.color}">${p.icon} ${esc(p.name)}</button>`).join('')}</div>
-      <div class="chipRow"><button class="chip ${filter==='all'?'on':''}" data-filter="all">Todas</button><button class="chip ${filter==='pending'?'on':''}" data-filter="pending">Pendientes</button><button class="chip ${filter==='today'?'on':''}" data-filter="today">Hoy</button><button class="chip danger ${filter==='overdue'?'on':''}" data-filter="overdue">Vencidas</button><button class="chip ${filter==='done'?'on':''}" data-filter="done">Completadas</button><button class="chip ${filter==='private'?'on':''}" data-filter="private">Privadas</button></div>
-      <section class="card"><div class="between"><h3 class="sectionTitle">Tareas</h3><div class="row"><button class="btn ghost" data-action="move-overdue">Reprogramar vencidas</button><button class="btn primary" data-action="new-task">＋ Nueva</button></div></div>${list.length?`<div class="stack">${list.map(t=>renderTaskMini(t,true)).join('')}</div>`:`<div class="empty">No hay tareas aquí.<br><button class="btn primary" data-action="new-task">Crear primera tarea</button></div>`}</section>`;
+    if (!state.tasks.length) {
+      return `${renderEmptyClean('✅','No tienes tareas','Crea una tarea simple. Los detalles aparecerán solo cuando los necesites.','new-task','Nueva tarea')}${renderAddStrip('También puedes')}`;
+    }
+    const overdueCount = visibleTasks().filter(isOverdue).length;
+    return `<section class="pageIntro"><h2>Tareas</h2><p>Toca una tarea para ver detalles o editarla.</p></section>
+      <div class="chipRow minimalFilters">
+        <button class="chip ${filter==='all'?'on':''}" data-filter="all">Todas</button>
+        <button class="chip ${filter==='pending'?'on':''}" data-filter="pending">Pendientes</button>
+        <button class="chip ${filter==='today'?'on':''}" data-filter="today">Hoy</button>
+        ${overdueCount?`<button class="chip danger ${filter==='overdue'?'on':''}" data-filter="overdue">Vencidas</button>`:''}
+        <button class="chip ${filter==='done'?'on':''}" data-filter="done">Completadas</button>
+      </div>
+      <section class="card cleanCard"><div class="between"><h3 class="sectionTitle">${filter==='all'?'Lista':filter}</h3><button class="btn primary" data-action="new-task" type="button">＋ Nueva</button></div>${list.length?`<div class="stack">${list.map(t=>renderTaskMini(t,true)).join('')}</div>`:`<div class="empty">No hay tareas con este filtro.</div>`}</section>`;
   }
 
   function renderCalendar() {
     const c = state.calendar, y = c.year, m = c.month;
-    const first = new Date(y,m,1).getDay(), days = new Date(y,m+1,0).getDate(), prevDays = new Date(y,m,0).getDate();
-    let cells = DOW.map(d=>`<div class="dow">${d}</div>`).join('');
-    for (let i=0;i<first;i++) cells += `<button class="day other" type="button"><span class="num">${prevDays-first+i+1}</span></button>`;
-    for (let d=1;d<=days;d++) {
-      const ds = localDate(new Date(y,m,d));
-      const evs = state.events.filter(e=>e.date===ds);
-      const taskCount = pendingTasks().filter(t=>t.due===ds).length;
-      cells += `<button class="day ${ds===today()?'today':''} ${ds===c.selected?'selected':''}" data-date="${ds}" type="button"><span class="num">${d}</span><div class="dots">${evs.slice(0,3).map(e=>`<span class="dot" style="background:${e.color}"></span>`).join('')}${taskCount?`<span class="dot" style="background:var(--warn)"></span>`:''}</div></button>`;
+    const upcoming = [...state.events].filter(e => e.date >= today()).sort((a,b)=>`${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+    const todayEvents = state.events.filter(e=>e.date===today()).sort((a,b)=>a.start.localeCompare(b.start));
+    if (!state.events.length) {
+      return `${renderEmptyClean('📅','No tienes eventos','Agrega un evento y aquí aparecerá tu agenda limpia.','new-event','Nuevo evento')}${renderAddStrip('Organizar')}`;
+    }
+    const grouped = upcoming.slice(0,12).reduce((acc,e)=>{(acc[e.date] ||= []).push(e); return acc;}, {});
+    let cells = '';
+    if (state.settings.showMonthCalendar) {
+      const first = new Date(y,m,1).getDay(), days = new Date(y,m+1,0).getDate(), prevDays = new Date(y,m,0).getDate();
+      cells = DOW.map(d=>`<div class="dow">${d}</div>`).join('');
+      for (let i=0;i<first;i++) cells += `<button class="day other" type="button"><span class="num">${prevDays-first+i+1}</span></button>`;
+      for (let d=1;d<=days;d++) {
+        const ds = localDate(new Date(y,m,d));
+        const evs = state.events.filter(e=>e.date===ds);
+        cells += `<button class="day ${ds===today()?'today':''} ${ds===c.selected?'selected':''}" data-date="${ds}" type="button"><span class="num">${d}</span>${evs.length?`<div class="dots"><span class="dot" style="background:var(--accent)"></span></div>`:''}</button>`;
+      }
     }
     const selectedEvents = state.events.filter(e=>e.date===c.selected).sort((a,b)=>a.start.localeCompare(b.start));
-    const selectedTasks = pendingTasks().filter(t=>t.due===c.selected);
-    return `<section class="card"><div class="between"><button class="btn ghost" data-action="month-prev">‹</button><h2>${MONTHS[m]} ${y}</h2><button class="btn ghost" data-action="month-next">›</button></div><div class="calendar">${cells}</div></section>
-      <section class="grid two" style="margin-top:var(--space)"><div class="card"><div class="between"><h3 class="sectionTitle">${fmtLongDate(c.selected)}</h3><button class="btn primary" data-action="new-event" data-date="${c.selected}">＋ Evento</button></div>${selectedEvents.length?selectedEvents.map(renderEventMini).join(''):`<div class="empty">Sin eventos este día.</div>`}</div><div class="card"><h3 class="sectionTitle">Tareas del día</h3>${selectedTasks.length?selectedTasks.map(t=>renderTaskMini(t,true)).join(''):`<div class="empty">Sin tareas para este día.</div>`}</div></section>`;
+    return `<section class="pageIntro"><h2>Calendario</h2><p>Agenda simple primero. El mes completo queda oculto hasta que lo necesites.</p></section>
+      ${todayEvents.length?`<section class="card cleanCard"><h3 class="sectionTitle">Hoy</h3>${todayEvents.map(renderEventMini).join('')}</section>`:''}
+      <section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Próximos eventos</h3><button class="btn primary" data-action="new-event" type="button">＋ Nuevo</button></div>${Object.keys(grouped).length?Object.entries(grouped).map(([date,evs])=>`<div class="agendaGroup"><div class="agendaDate">${fmtLongDate(date)}</div>${evs.map(renderEventMini).join('')}</div>`).join(''):`<div class="empty">No hay eventos próximos.</div>`}</section>
+      <section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Vista mensual</h3><button class="chip" data-action="calendar-toggle-month" type="button">${state.settings.showMonthCalendar?'Ocultar mes':'Ver mes completo'}</button></div>${state.settings.showMonthCalendar?`<div class="between monthNav"><button class="btn ghost" data-action="month-prev">‹</button><h2>${MONTHS[m]} ${y}</h2><button class="btn ghost" data-action="month-next">›</button></div><div class="calendar minimalCalendar">${cells}</div>${selectedEvents.length?`<div class="selectedDay"><h3 class="sectionTitle">${fmtLongDate(c.selected)}</h3>${selectedEvents.map(renderEventMini).join('')}</div>`:''}`:`<p class="muted small">Oculto para mantener la pantalla limpia.</p>`}</section>`;
   }
 
   function renderFinance() {
@@ -482,7 +537,7 @@
   function closeModals() { qsa('.modalBack').forEach(m=>m.classList.remove('show')); }
   function openQuick() {
     $('quick-actions').innerHTML = [
-      ['✅','Nueva tarea','Captura rápida','new-task'],['📅','Nuevo evento','Agenda algo','new-event'],['💸','Registrar gasto','Finanzas','new-finance'],['🌱','Registrar hábito','Salud','view-habits'],['🎯','Modo enfoque','Pomodoro','focus'],['🤖','Plan del día','Asistente','assistant-plan'],['⌕','Buscar','Global','open-search'],['↩️','Deshacer','Última eliminación','undo-delete']
+      ['✅','Tarea','Algo por hacer','new-task'],['📅','Evento','Agenda una hora','new-event'],['🌱','Hábito','Crea una rutina','new-habit'],['💸','Gasto','Registra dinero','new-finance'],['🤖','Plan del día','Resumen simple','assistant-plan'],['⌕','Buscar','Encuentra algo','open-search']
     ].map(([icon,title,sub,action])=>`<button class="actionTile" data-action="${action}"><span>${icon}</span><strong>${title}</strong><small class="muted">${sub}</small></button>`).join('');
     openModal('quick-modal');
   }
@@ -607,8 +662,12 @@
     if (action === 'open-quick') return openQuick();
     if (action === 'open-search') return openSearch();
     if (action === 'new-task') return openTaskForm();
+    if (action === 'task-detail') return openTaskDetail(el.dataset.id);
     if (action === 'edit-task') return openTaskForm(el.dataset.id);
     if (action === 'new-event') return openEventForm(null, el.dataset.date);
+    if (action === 'event-detail') return openEventDetail(el.dataset.id);
+    if (action === 'edit-event') return openEventForm(el.dataset.id);
+    if (action === 'delete-event') return deleteItem('event', el.dataset.id);
     if (action === 'new-finance') return openFinanceForm();
     if (action === 'new-habit') return openHabitForm();
     if (action === 'edit-habit') return openHabitForm(el.dataset.id);
@@ -629,6 +688,7 @@
     if (action === 'routine') return createRoutine(el.dataset.name);
     if (action === 'month-prev') { state.calendar.month--; if(state.calendar.month<0){state.calendar.month=11;state.calendar.year--;} sync(); return; }
     if (action === 'month-next') { state.calendar.month++; if(state.calendar.month>11){state.calendar.month=0;state.calendar.year++;} sync(); return; }
+    if (action === 'calendar-toggle-month') { state.settings.showMonthCalendar = !state.settings.showMonthCalendar; sync(); return; }
     if (action === 'habit-inc' || action === 'habit-dec') { const h=state.habits.find(x=>x.id===el.dataset.id); if(h){h.log[today()]=Math.max(0,Number(h.log[today()]||0)+(action==='habit-inc'?1:-1)); state.xp += action==='habit-inc'?2:0; sync();} return; }
     if (action === 'toggle-habit-date') { const h=state.habits.find(x=>x.id===el.dataset.id); if(h){h.log[el.dataset.date]=Number(h.log[el.dataset.date]||0)>=h.goal?0:h.goal; sync();} return; }
     if (action === 'move-kanban') return moveKanban(el.dataset.id, el.dataset.status);
@@ -697,7 +757,7 @@
     $('pin-pad').addEventListener('click',e=>{const b=e.target.closest('[data-pin]'); if(b)pinPress(b.dataset.pin);});
     $('global-search-input').addEventListener('input',e=>$('global-search-results').innerHTML=doSearch(e.target.value));
     document.addEventListener('submit',e=>{ if(e.target.id==='assistant-form'){ e.preventDefault(); const inp=$('assistant-input'); if(inp.value.trim()) sendAssistant(inp.value.trim()); }});
-    $('onboarding-form').addEventListener('submit',e=>{e.preventDefault(); state.settings.userName=$('ob-user').value.trim()||'Usuario'; state.settings.assistantName=$('ob-assistant').value.trim()||'Jarvis'; state.settings.currency=$('ob-currency').value; state.settings.accent=$('ob-accent').value; state.settings.density=$('ob-compact').checked?'compact':'comfortable'; state.settings.pinEnabled=$('ob-pin').checked; state.settings.mode=qs('input[name="ob-mode"]:checked').value; state.settings.onboarded=true; $('onboarding').classList.remove('show'); sync();});
+    $('onboarding-form').addEventListener('submit',e=>{e.preventDefault(); state.settings.userName=$('ob-user').value.trim()||'Usuario'; state.settings.assistantName=$('ob-assistant').value.trim()||'Jarvis'; state.settings.currency=$('ob-currency').value; state.settings.accent=$('ob-accent').value; state.settings.density=$('ob-compact').checked?'compact':'comfortable'; state.settings.pinEnabled=$('ob-pin').checked; state.settings.mode=$('ob-mode-select')?.value || qs('input[name="ob-mode"]:checked').value; state.settings.onboarded=true; $('onboarding').classList.remove('show'); sync();});
     document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModals(); if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();} });
     window.addEventListener('online',applyTheme); window.addEventListener('offline',applyTheme);
   }

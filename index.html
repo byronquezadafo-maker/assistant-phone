@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Assistant Phone" />
-  <meta name="description" content="Assistant Phone: productividad, hábitos y finanzas offline para iPhone." />
+  <meta name="description" content="Assistant Phone Minimal v5: productividad offline limpia, progresiva y más intuitiva para iPhone." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
-  <title>Assistant Phone</title>
+  <title>Assistant Phone Minimal v5</title>
 </head>
 <body>
   <div class="bgAura" aria-hidden="true"></div>
@@ -20,21 +20,23 @@
   <div id="onboarding" class="modalBack show" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
     <form class="modal centerModal" id="onboarding-form">
       <div class="modalHero">📱</div>
-      <h1 id="onboarding-title">Configura tu Assistant Phone</h1>
-      <p class="muted">Una app personal offline para organizar tu día, tareas, hábitos, dinero y enfoque.</p>
+      <h1 id="onboarding-title">Bienvenido</h1>
+      <p class="muted">Configura lo básico y empieza con una pantalla limpia.</p>
       <div class="field"><label for="ob-user">Tu nombre</label><input id="ob-user" class="input" value="Byron" autocomplete="name"></div>
       <div class="field"><label for="ob-assistant">Nombre del asistente</label><input id="ob-assistant" class="input" value="Jarvis" autocomplete="off"></div>
-      <div class="grid two">
-        <div class="field"><label for="ob-currency">Moneda</label><select id="ob-currency" class="input"><option value="USD">USD $</option><option value="MXN">MXN $</option><option value="COP">COP $</option><option value="EUR">EUR €</option><option value="CLP">CLP $</option><option value="PEN">PEN S/</option></select></div>
-        <div class="field"><label for="ob-accent">Color</label><input id="ob-accent" class="input color" type="color" value="#7c5cfc"></div>
-      </div>
-      <div class="choiceGrid">
-        <label><input type="radio" name="ob-mode" value="simple" checked><span>Modo simple</span><small>Inicio, tareas, calendario y asistente.</small></label>
-        <label><input type="radio" name="ob-mode" value="advanced"><span>Modo avanzado</span><small>Kanban, insights, finanzas y productividad.</small></label>
-      </div>
-      <label class="checkRow"><input id="ob-compact" type="checkbox"> Usar modo compacto</label>
-      <label class="checkRow"><input id="ob-pin" type="checkbox"> Activar privacidad visual con PIN 1234</label>
-      <button class="btn primary full" type="submit">Empezar mi día</button>
+      <div class="field"><label for="ob-accent">Color principal</label><input id="ob-accent" class="input color" type="color" value="#7c5cfc"></div>
+      <details class="optionalSetup">
+        <summary>Opciones adicionales</summary>
+        <div class="grid two">
+          <div class="field"><label for="ob-currency">Moneda</label><select id="ob-currency" class="input"><option value="USD">USD $</option><option value="MXN">MXN $</option><option value="COP">COP $</option><option value="EUR">EUR €</option><option value="CLP">CLP $</option><option value="PEN">PEN S/</option></select></div>
+          <div class="field"><label for="ob-mode-select">Modo</label><select id="ob-mode-select" class="input"><option value="simple">Simple</option><option value="advanced">Avanzado</option></select></div>
+        </div>
+        <input type="radio" name="ob-mode" value="simple" checked hidden>
+        <input type="radio" name="ob-mode" value="advanced" hidden>
+        <label class="checkRow"><input id="ob-compact" type="checkbox"> Usar modo compacto</label>
+        <label class="checkRow"><input id="ob-pin" type="checkbox"> Activar privacidad visual con PIN 1234</label>
+      </details>
+      <button class="btn primary full" type="submit">Empezar</button>
     </form>
   </div>
 
@@ -127,6 +129,22 @@
     </form>
   </div>
 
+
+
+  <div id="task-detail-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
+    <div class="modal detailSheet">
+      <div class="sheetHandle"></div>
+      <div id="task-detail-content"></div>
+    </div>
+  </div>
+
+  <div id="event-detail-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="event-detail-title">
+    <div class="modal detailSheet">
+      <div class="sheetHandle"></div>
+      <div id="event-detail-content"></div>
+    </div>
+  </div>
+
   <div class="app">
     <aside class="sidebar" aria-label="Navegación">
       <div class="brand"><div class="brandMark" id="brand-mark">🤖</div><div><strong>Assistant Phone</strong><span id="brand-sub">Jarvis · Offline</span></div></div>
@@ -152,7 +170,7 @@
     <nav class="mobileNav" id="mobile-nav" aria-label="Navegación móvil"></nav>
   </div>
 
-  <button id="fab" class="fab" type="button" aria-label="Acciones rápidas">＋</button>
+  <button id="fab" class="fab" type="button" aria-label="Acciones rápidas"><span>＋</span><strong>Agregar</strong></button>
 
   <script src="app.js"></script>
 </body>

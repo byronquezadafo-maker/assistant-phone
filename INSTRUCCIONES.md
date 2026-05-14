@@ -1,37 +1,29 @@
-# Assistant Phone PWA v3
+# Assistant Phone PWA v5
 
-Esta versión está pensada para iPhone como Web App/PWA offline.
+Versión minimalista progresiva para iPhone.
 
 ## Qué incluye
 
-- Home tipo iPhone con tarjetas inteligentes.
-- Plan del día automático.
-- Botón central de acciones rápidas.
-- Búsqueda global con Ctrl/Cmd + K.
-- Asistente local sin ChatGPT ni API externa.
-- Comandos para crear tareas, eventos y gastos.
-- Tareas con subtareas, posponer y reprogramar vencidas.
-- Centro de notificaciones interno.
-- Modo simple / modo avanzado.
-- Modo privacidad visual.
-- Finanzas con balance mensual y dinero disponible por día.
-- Hábitos, rachas, ánimo e insights.
-- Kanban e insights semanales en modo avanzado.
-- Temas, densidad compacta/grande y backup JSON.
-- Manifest + service worker + iconos para instalación.
+- Inicio limpio y progresivo.
+- Botón fijo `+ Agregar` para crear contenido rápido.
+- Tareas simples en lista; los detalles se abren en hoja inferior tipo iPhone.
+- Eventos con agenda simple antes de la vista mensual.
+- Estados vacíos más claros.
+- Onboarding más corto.
+- Modo offline con service worker.
+- Backup/importación JSON desde configuración.
 
-## Instalar en iPhone
+## Actualizar en GitHub Pages
 
-1. Sube todos los archivos de esta carpeta a GitHub Pages, Netlify, Vercel o cualquier hosting HTTPS.
-2. Abre la URL en Safari desde el iPhone.
-3. Toca Compartir.
-4. Toca “Agregar a pantalla de inicio”.
-5. Abre la app desde el icono creado.
+1. Descomprime este ZIP.
+2. En tu repositorio `assistant-phone`, ve a `Code`.
+3. Elige `Add file` → `Upload files`.
+4. Sube los archivos descomprimidos, no el ZIP.
+5. Acepta reemplazar archivos anteriores.
+6. Presiona `Commit changes`.
+7. Espera 1 a 3 minutos.
+8. Abre la app en iPhone. Si ves la versión anterior, cierra la app y vuelve a abrirla.
 
-## Notas importantes
+## Importante
 
-- Funciona offline después de la primera carga.
-- Los datos se guardan en el navegador con localStorage.
-- Exporta backup JSON con frecuencia desde Configuración.
-- El PIN es privacidad visual; no es cifrado real.
-- No usa ChatGPT ni servicios externos.
+Antes de actualizar, exporta un backup desde la app si tienes información importante.

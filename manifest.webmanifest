@@ -1,7 +1,7 @@
 {
-  "name": "Assistant Phone",
+  "name": "Assistant Phone Minimal v5",
   "short_name": "Assistant",
-  "description": "Productividad personal offline con tareas, calendario, hábitos, finanzas y asistente local.",
+  "description": "Productividad personal offline con diseño limpio, detalles en hoja inferior y acciones simples.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",
