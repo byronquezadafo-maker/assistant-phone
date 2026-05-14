@@ -1,4 +1,4 @@
-const CACHE = 'assistant-phone-v5-clean-cache-1';
+const CACHE = 'assistant-phone-v8-competitive-cache-1';
 const FILES = [
   './',
   './index.html',

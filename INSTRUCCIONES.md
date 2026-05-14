@@ -1,29 +1,25 @@
-# Assistant Phone PWA v5
+# Assistant Phone PWA v8
 
-Versión minimalista progresiva para iPhone.
+Versión competitiva local y minimalista.
 
-## Qué incluye
+## Novedades principales
 
-- Inicio limpio y progresivo.
-- Botón fijo `+ Agregar` para crear contenido rápido.
-- Tareas simples en lista; los detalles se abren en hoja inferior tipo iPhone.
-- Eventos con agenda simple antes de la vista mensual.
-- Estados vacíos más claros.
-- Onboarding más corto.
-- Modo offline con service worker.
-- Backup/importación JSON desde configuración.
+- Captura rápida inteligente: escribe una frase y la app detecta tarea, evento, gasto, hábito o nota.
+- Planear mi día: genera un plan según energía y tiempo disponible.
+- Siguiente mejor acción con explicación.
+- Plantillas de rutinas: mañana, trabajo, noche y estudio.
+- Notas rápidas y conversión de nota a tarea.
+- Compartir mi día con el menú nativo del teléfono o copiando al portapapeles.
+- Sigue funcionando offline como PWA.
+- Mantiene la misma clave local de datos para no perder información de versiones anteriores.
 
 ## Actualizar en GitHub Pages
 
-1. Descomprime este ZIP.
-2. En tu repositorio `assistant-phone`, ve a `Code`.
-3. Elige `Add file` → `Upload files`.
-4. Sube los archivos descomprimidos, no el ZIP.
-5. Acepta reemplazar archivos anteriores.
-6. Presiona `Commit changes`.
-7. Espera 1 a 3 minutos.
-8. Abre la app en iPhone. Si ves la versión anterior, cierra la app y vuelve a abrirla.
+1. Descomprime el ZIP.
+2. Sube todos los archivos al mismo repositorio `assistant-phone`.
+3. Reemplaza los archivos existentes.
+4. Presiona **Commit changes**.
+5. Espera a que GitHub Pages publique.
+6. En iPhone, cierra y vuelve a abrir la app.
 
-## Importante
-
-Antes de actualizar, exporta un backup desde la app si tienes información importante.
+Si ves la versión antigua, espera unos minutos o abre la URL en Safari y actualiza.

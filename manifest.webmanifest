@@ -1,7 +1,7 @@
 {
-  "name": "Assistant Phone Minimal v5",
+  "name": "Assistant Phone v8",
   "short_name": "Assistant",
-  "description": "Productividad personal offline con diseño limpio, detalles en hoja inferior y acciones simples.",
+  "description": "Asistente personal diario offline con captura rápida inteligente, plan del día y diseño minimalista.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",

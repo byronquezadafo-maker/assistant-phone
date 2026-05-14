@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Assistant Phone" />
-  <meta name="description" content="Assistant Phone Minimal v5: productividad offline limpia, progresiva y más intuitiva para iPhone." />
+  <meta name="description" content="Assistant Phone v8: asistente diario local, minimalista, con captura rápida inteligente y plan del día." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
-  <title>Assistant Phone Minimal v5</title>
+  <title>Assistant Phone v8</title>
 </head>
 <body>
   <div class="bgAura" aria-hidden="true"></div>
@@ -83,7 +83,7 @@
         <div class="field"><label for="task-estimate">Duración estimada</label><input id="task-estimate" class="input" type="number" min="0" step="5" placeholder="30"></div>
       </div>
       <div class="grid two">
-        <div class="field"><label for="task-reminder">Recordatorio visual</label><input id="task-reminder" class="input" type="time"></div>
+        <div class="field"><label for="task-reminder">Hora de alarma</label><input id="task-reminder" class="input" type="time" placeholder="08:00"></div>
         <div class="field"><label for="task-repeat">Repetir</label><select id="task-repeat" class="input"><option value="never">Nunca</option><option value="daily">Diario</option><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></div>
       </div>
       <div class="field"><label for="task-subtasks">Subtareas</label><textarea id="task-subtasks" class="input" placeholder="Una subtarea por línea"></textarea></div>
@@ -103,6 +103,7 @@
       <div class="field"><label for="event-location">Ubicación o link</label><input id="event-location" class="input" autocomplete="off"></div>
       <div class="grid two"><div class="field"><label for="event-date">Fecha</label><input id="event-date" class="input" type="date" required></div><div class="field"><label for="event-color">Color</label><input id="event-color" class="input color" type="color" value="#38bdf8"></div></div>
       <div class="grid two"><div class="field"><label for="event-start">Inicio</label><input id="event-start" class="input" type="time" value="09:00" required></div><div class="field"><label for="event-end">Fin</label><input id="event-end" class="input" type="time" value="10:00" required></div></div>
+      <div class="field"><label for="event-reminder">Hora de alarma</label><input id="event-reminder" class="input" type="time" placeholder="08:30"><small class="fieldHint">Opcional. La alarma sonará a esta hora en la fecha del evento.</small></div>
       <div class="modalActions row between"><button class="btn danger" id="delete-event" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
     </form>
   </div>
@@ -125,10 +126,65 @@
       <div class="grid two"><div class="field"><label for="habit-name">Nombre</label><input id="habit-name" class="input" required></div><div class="field"><label for="habit-icon">Icono</label><input id="habit-icon" class="input" maxlength="3" value="✨"></div></div>
       <div class="grid two"><div class="field"><label for="habit-goal">Meta diaria</label><input id="habit-goal" class="input" type="number" min="1" value="1"></div><div class="field"><label for="habit-unit">Unidad</label><input id="habit-unit" class="input" value="vez"></div></div>
       <div class="field"><label for="habit-color">Color</label><input id="habit-color" class="input color" type="color" value="#00d68f"></div>
+      <div class="field"><label for="habit-reminder">Hora de alarma diaria</label><input id="habit-reminder" class="input" type="time" placeholder="08:00"></div>
       <div class="modalActions row between"><button class="btn danger" id="delete-habit" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
     </form>
   </div>
 
+
+
+  <div id="capture-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+    <form class="modal centerModal" id="capture-modal-form">
+      <div class="row between"><h2 id="capture-title">Captura rápida</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <p class="muted">Escribe normal. La app detecta si es tarea, evento, gasto, hábito o nota.</p>
+      <div class="field"><label for="capture-text">¿Qué quieres agregar?</label><input id="capture-text" class="input" autocomplete="off" placeholder="Ej: llamar al médico mañana 10am"></div>
+      <div class="exampleChips" aria-label="Ejemplos">
+        <button class="chip" type="button" data-example="llamar al médico mañana 10am">Tarea</button>
+        <button class="chip" type="button" data-example="evento reunión viernes 15:00">Evento</button>
+        <button class="chip" type="button" data-example="gasto 20 comida">Gasto</button>
+        <button class="chip" type="button" data-example="hábito leer diario 20:00">Hábito</button>
+        <button class="chip" type="button" data-example="nota ideas para viaje">Nota</button>
+      </div>
+      <button class="btn primary full" type="submit">Agregar</button>
+    </form>
+  </div>
+
+  <div id="planner-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="planner-title">
+    <form class="modal centerModal" id="planner-form">
+      <div class="row between"><h2 id="planner-title">Planear mi día</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <p class="muted">Elige tu energía y tiempo disponible. La app te propone un plan simple con tus datos.</p>
+      <div class="grid two">
+        <div class="field"><label for="planner-energy">Energía</label><select id="planner-energy" class="input"><option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option></select></div>
+        <div class="field"><label for="planner-minutes">Tiempo disponible</label><select id="planner-minutes" class="input"><option value="30">30 min</option><option value="60" selected>1 hora</option><option value="180">3 horas</option><option value="480">Todo el día</option></select></div>
+      </div>
+      <div id="planner-result" class="plannerResult"></div>
+      <button class="btn primary full" type="submit">Generar plan</button>
+    </form>
+  </div>
+
+  <div id="templates-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="templates-title">
+    <div class="modal actionSheet">
+      <div class="sheetHandle"></div>
+      <div class="row between"><h2 id="templates-title">Plantillas</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <p class="muted">Crea una rutina completa con un toque.</p>
+      <div class="actionGrid">
+        <button class="actionTile" data-action="routine" data-name="mañana"><span>🌅</span><strong>Mañana</strong><small class="muted">Agua, agenda y prioridad</small></button>
+        <button class="actionTile" data-action="routine" data-name="trabajo"><span>💼</span><strong>Trabajo</strong><small class="muted">Correo, enfoque y pendientes</small></button>
+        <button class="actionTile" data-action="routine" data-name="noche"><span>🌙</span><strong>Noche</strong><small class="muted">Preparar mañana y leer</small></button>
+        <button class="actionTile" data-action="routine" data-name="estudio"><span>📚</span><strong>Estudio</strong><small class="muted">Bloques cortos de aprendizaje</small></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="note-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="note-title-modal">
+    <form class="modal" id="note-form">
+      <div class="row between"><h2 id="note-title-modal">Nueva nota</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="note-id" type="hidden">
+      <div class="field"><label for="note-title">Título</label><input id="note-title" class="input" required autocomplete="off" placeholder="Ej: ideas para proyecto"></div>
+      <div class="field"><label for="note-body">Contenido</label><textarea id="note-body" class="input" placeholder="Escribe una idea rápida..."></textarea></div>
+      <div class="modalActions row between"><button class="btn danger" id="delete-note" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
+    </form>
+  </div>
 
 
   <div id="task-detail-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
