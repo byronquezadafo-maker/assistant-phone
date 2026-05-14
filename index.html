@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#08080f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Assistant Phone" />
+  <meta name="description" content="Assistant Phone: productividad, hábitos y finanzas offline para iPhone." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Assistant Phone</title>
+</head>
+<body>
+  <div class="bgAura" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="onboarding" class="modalBack show" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+    <form class="modal centerModal" id="onboarding-form">
+      <div class="modalHero">📱</div>
+      <h1 id="onboarding-title">Configura tu Assistant Phone</h1>
+      <p class="muted">Una app personal offline para organizar tu día, tareas, hábitos, dinero y enfoque.</p>
+      <div class="field"><label for="ob-user">Tu nombre</label><input id="ob-user" class="input" value="Byron" autocomplete="name"></div>
+      <div class="field"><label for="ob-assistant">Nombre del asistente</label><input id="ob-assistant" class="input" value="Jarvis" autocomplete="off"></div>
+      <div class="grid two">
+        <div class="field"><label for="ob-currency">Moneda</label><select id="ob-currency" class="input"><option value="USD">USD $</option><option value="MXN">MXN $</option><option value="COP">COP $</option><option value="EUR">EUR €</option><option value="CLP">CLP $</option><option value="PEN">PEN S/</option></select></div>
+        <div class="field"><label for="ob-accent">Color</label><input id="ob-accent" class="input color" type="color" value="#7c5cfc"></div>
+      </div>
+      <div class="choiceGrid">
+        <label><input type="radio" name="ob-mode" value="simple" checked><span>Modo simple</span><small>Inicio, tareas, calendario y asistente.</small></label>
+        <label><input type="radio" name="ob-mode" value="advanced"><span>Modo avanzado</span><small>Kanban, insights, finanzas y productividad.</small></label>
+      </div>
+      <label class="checkRow"><input id="ob-compact" type="checkbox"> Usar modo compacto</label>
+      <label class="checkRow"><input id="ob-pin" type="checkbox"> Activar privacidad visual con PIN 1234</label>
+      <button class="btn primary full" type="submit">Empezar mi día</button>
+    </form>
+  </div>
+
+  <div id="lock" class="lock" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+    <div class="card lockPanel">
+      <div class="lockIcon">🔒</div>
+      <h2 id="lock-title">Privacidad visual</h2>
+      <p class="muted">Ingresa tu PIN. Esto oculta la pantalla, no cifra datos.</p>
+      <div id="pin-dots" class="pinDots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <p id="pin-error" class="errorLine" aria-live="assertive"></p>
+      <div id="pin-pad" class="pinPad"></div>
+      <button class="btn ghost full" id="quick-unlock" type="button">😀 Desbloqueo visual rápido</button>
+    </div>
+  </div>
+
+  <div id="search-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="search-title">
+    <div class="modal centerModal">
+      <div class="row between"><h2 id="search-title">Búsqueda global</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="global-search-input" class="input searchInput" placeholder="Buscar tareas, eventos, gastos, hábitos..." autocomplete="off">
+      <div id="global-search-results" class="searchResults"></div>
+    </div>
+  </div>
+
+  <div id="quick-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="quick-title">
+    <div class="modal actionSheet">
+      <div class="sheetHandle"></div>
+      <h2 id="quick-title">¿Qué quieres hacer?</h2>
+      <div class="actionGrid" id="quick-actions"></div>
+    </div>
+  </div>
+
+  <div id="task-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="task-title-modal">
+    <form class="modal" id="task-form">
+      <div class="row between"><h2 id="task-title-modal">Nueva tarea</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="task-id" type="hidden">
+      <div class="field"><label for="task-title">Título</label><input id="task-title" class="input" required autocomplete="off" placeholder="Ej: llamar al médico"></div>
+      <div class="field"><label for="task-note">Nota</label><textarea id="task-note" class="input" placeholder="Detalles opcionales"></textarea></div>
+      <div class="grid two">
+        <div class="field"><label for="task-priority">Prioridad</label><select id="task-priority" class="input"><option value="alta">Alta</option><option value="media" selected>Media</option><option value="baja">Baja</option></select></div>
+        <div class="field"><label for="task-project">Proyecto</label><select id="task-project" class="input"></select></div>
+      </div>
+      <div class="grid two">
+        <div class="field"><label for="task-due">Fecha límite</label><input id="task-due" class="input" type="date"></div>
+        <div class="field"><label for="task-estimate">Duración estimada</label><input id="task-estimate" class="input" type="number" min="0" step="5" placeholder="30"></div>
+      </div>
+      <div class="grid two">
+        <div class="field"><label for="task-reminder">Recordatorio visual</label><input id="task-reminder" class="input" type="time"></div>
+        <div class="field"><label for="task-repeat">Repetir</label><select id="task-repeat" class="input"><option value="never">Nunca</option><option value="daily">Diario</option><option value="weekly">Semanal</option><option value="monthly">Mensual</option></select></div>
+      </div>
+      <div class="field"><label for="task-subtasks">Subtareas</label><textarea id="task-subtasks" class="input" placeholder="Una subtarea por línea"></textarea></div>
+      <label class="checkRow"><input id="task-private" type="checkbox"> Privada / ocultar en modo privacidad</label>
+      <div class="modalActions row between">
+        <button class="btn danger" id="delete-task" type="button">Eliminar</button>
+        <div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div>
+      </div>
+    </form>
+  </div>
+
+  <div id="event-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="event-title-modal">
+    <form class="modal" id="event-form">
+      <div class="row between"><h2 id="event-title-modal">Nuevo evento</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="event-id" type="hidden">
+      <div class="field"><label for="event-title">Título</label><input id="event-title" class="input" required autocomplete="off"></div>
+      <div class="field"><label for="event-location">Ubicación o link</label><input id="event-location" class="input" autocomplete="off"></div>
+      <div class="grid two"><div class="field"><label for="event-date">Fecha</label><input id="event-date" class="input" type="date" required></div><div class="field"><label for="event-color">Color</label><input id="event-color" class="input color" type="color" value="#38bdf8"></div></div>
+      <div class="grid two"><div class="field"><label for="event-start">Inicio</label><input id="event-start" class="input" type="time" value="09:00" required></div><div class="field"><label for="event-end">Fin</label><input id="event-end" class="input" type="time" value="10:00" required></div></div>
+      <div class="modalActions row between"><button class="btn danger" id="delete-event" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
+    </form>
+  </div>
+
+  <div id="finance-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="finance-title-modal">
+    <form class="modal" id="finance-form">
+      <div class="row between"><h2 id="finance-title-modal">Nueva transacción</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="finance-id" type="hidden">
+      <div class="field"><label for="finance-desc">Descripción</label><input id="finance-desc" class="input" required autocomplete="off" placeholder="Ej: supermercado"></div>
+      <div class="grid two"><div class="field"><label for="finance-amount">Monto</label><input id="finance-amount" class="input" type="number" min="0" step="0.01" required></div><div class="field"><label for="finance-type">Tipo</label><select id="finance-type" class="input"><option value="expense">Gasto</option><option value="income">Ingreso</option></select></div></div>
+      <div class="grid two"><div class="field"><label for="finance-cat">Categoría</label><select id="finance-cat" class="input"></select></div><div class="field"><label for="finance-date">Fecha</label><input id="finance-date" class="input" type="date" required></div></div>
+      <div class="modalActions row between"><button class="btn danger" id="delete-finance" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
+    </form>
+  </div>
+
+  <div id="habit-modal" class="modalBack" role="dialog" aria-modal="true" aria-labelledby="habit-title-modal">
+    <form class="modal" id="habit-form">
+      <div class="row between"><h2 id="habit-title-modal">Nuevo hábito</h2><button class="iconBtn closeModal" type="button" aria-label="Cerrar">×</button></div>
+      <input id="habit-id" type="hidden">
+      <div class="grid two"><div class="field"><label for="habit-name">Nombre</label><input id="habit-name" class="input" required></div><div class="field"><label for="habit-icon">Icono</label><input id="habit-icon" class="input" maxlength="3" value="✨"></div></div>
+      <div class="grid two"><div class="field"><label for="habit-goal">Meta diaria</label><input id="habit-goal" class="input" type="number" min="1" value="1"></div><div class="field"><label for="habit-unit">Unidad</label><input id="habit-unit" class="input" value="vez"></div></div>
+      <div class="field"><label for="habit-color">Color</label><input id="habit-color" class="input color" type="color" value="#00d68f"></div>
+      <div class="modalActions row between"><button class="btn danger" id="delete-habit" type="button">Eliminar</button><div class="row"><button class="btn ghost closeModal" type="button">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></div>
+    </form>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar" aria-label="Navegación">
+      <div class="brand"><div class="brandMark" id="brand-mark">🤖</div><div><strong>Assistant Phone</strong><span id="brand-sub">Jarvis · Offline</span></div></div>
+      <nav id="side-nav"></nav>
+      <div class="sideFooter"><button class="btn ghost full" id="privacy-toggle" type="button">👁️ Modo privacidad</button></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topTitle"><h1 id="page-title">Inicio</h1><p id="page-subtitle">Tu centro de mando diario</p></div>
+        <div class="topActions">
+          <button class="pillBtn" id="online-state" type="button"><span class="statusDot"></span> Offline listo</button>
+          <button class="iconBtn" id="search-btn" type="button" aria-label="Buscar">⌕</button>
+          <button class="iconBtn" id="voice-btn" type="button" aria-label="Voz">🎙️</button>
+          <button class="iconBtn" id="lock-btn" type="button" aria-label="Bloquear">🔒</button>
+          <button class="iconBtn primary" id="quick-btn" type="button" aria-label="Acciones rápidas">＋</button>
+        </div>
+      </header>
+
+      <section id="content" class="content" tabindex="-1"></section>
+    </main>
+
+    <nav class="mobileNav" id="mobile-nav" aria-label="Navegación móvil"></nav>
+  </div>
+
+  <button id="fab" class="fab" type="button" aria-label="Acciones rápidas">＋</button>
+
+  <script src="app.js"></script>
+</body>
+</html>
