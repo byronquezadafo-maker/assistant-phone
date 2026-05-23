@@ -7,24 +7,37 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Assistant Phone" />
-  <meta name="description" content="Assistant Phone v8: asistente diario local, minimalista, con captura rápida inteligente y plan del día." />
+  <meta name="description" content="Assistant Phone v12: asistente diario adaptable, minimalista, con captura universal, perfiles y rutinas." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
-  <title>Assistant Phone v8</title>
+  <title>Assistant Phone v12</title>
 </head>
 <body>
   <div class="bgAura" aria-hidden="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <div id="alarm-modal" class="alarmModal" role="alertdialog" aria-modal="true" aria-labelledby="alarm-title">
+    <div class="alarmCard">
+      <div id="alarm-icon" class="alarmIcon">🔔</div>
+      <h2 id="alarm-title">Recordatorio</h2>
+      <p id="alarm-text" class="muted"></p>
+      <div class="row alarmActions">
+        <button class="btn primary" id="alarm-primary" type="button">Ver</button>
+        <button class="btn ghost" id="alarm-close" type="button">Cerrar</button>
+      </div>
+      <small class="muted">Consejo: toca “Activar notificaciones” en Configuración para probar una alarma del dispositivo.</small>
+    </div>
+  </div>
+
   <div id="onboarding" class="modalBack show" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
     <form class="modal centerModal" id="onboarding-form">
       <div class="modalHero">📱</div>
       <h1 id="onboarding-title">Bienvenido</h1>
-      <p class="muted">Configura lo básico y empieza con una pantalla limpia.</p>
+      <p class="muted">Configura lo básico y elige el enfoque que más se parezca a tu día.</p>
       <div class="field"><label for="ob-user">Tu nombre</label><input id="ob-user" class="input" value="Byron" autocomplete="name"></div>
       <div class="field"><label for="ob-assistant">Nombre del asistente</label><input id="ob-assistant" class="input" value="Jarvis" autocomplete="off"></div>
-      <div class="field"><label for="ob-accent">Color principal</label><input id="ob-accent" class="input color" type="color" value="#7c5cfc"></div>
+      <div class="field"><label for="ob-accent">Color principal</label><input id="ob-accent" class="input color" type="color" value="#7c5cfc"></div><div class="field"><label for="ob-usecase">Enfoque</label><select id="ob-usecase" class="input"><option value="personal">Personal diario</option><option value="student">Estudiante</option><option value="freelance">Freelance / trabajo</option><option value="home">Hogar / familia</option><option value="wellness">Bienestar</option><option value="finance">Finanzas simples</option><option value="business">Pequeño negocio</option><option value="senior">Recordatorios simples</option></select></div>
       <details class="optionalSetup">
         <summary>Opciones adicionales</summary>
         <div class="grid two">
@@ -34,7 +47,7 @@
         <input type="radio" name="ob-mode" value="simple" checked hidden>
         <input type="radio" name="ob-mode" value="advanced" hidden>
         <label class="checkRow"><input id="ob-compact" type="checkbox"> Usar modo compacto</label>
-        <label class="checkRow"><input id="ob-pin" type="checkbox"> Activar privacidad visual con PIN 1234</label>
+        <label class="checkRow"><input id="ob-pin" type="checkbox"> Activar privacidad visual con PIN</label>
       </details>
       <button class="btn primary full" type="submit">Empezar</button>
     </form>
@@ -48,7 +61,7 @@
       <div id="pin-dots" class="pinDots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
       <p id="pin-error" class="errorLine" aria-live="assertive"></p>
       <div id="pin-pad" class="pinPad"></div>
-      <button class="btn ghost full" id="quick-unlock" type="button">😀 Desbloqueo visual rápido</button>
+      <button class="btn ghost full" id="quick-unlock" type="button">Cerrar bloqueo visual</button>
     </div>
   </div>
 
@@ -172,6 +185,10 @@
         <button class="actionTile" data-action="routine" data-name="trabajo"><span>💼</span><strong>Trabajo</strong><small class="muted">Correo, enfoque y pendientes</small></button>
         <button class="actionTile" data-action="routine" data-name="noche"><span>🌙</span><strong>Noche</strong><small class="muted">Preparar mañana y leer</small></button>
         <button class="actionTile" data-action="routine" data-name="estudio"><span>📚</span><strong>Estudio</strong><small class="muted">Bloques cortos de aprendizaje</small></button>
+        <button class="actionTile" data-action="routine" data-name="compras"><span>🛒</span><strong>Compras</strong><small class="muted">Despensa, lista y compra</small></button>
+        <button class="actionTile" data-action="routine" data-name="salud"><span>💊</span><strong>Salud</strong><small class="muted">Medicina, caminata y ánimo</small></button>
+        <button class="actionTile" data-action="routine" data-name="negocio"><span>🏪</span><strong>Negocio</strong><small class="muted">Citas, cobros y gastos</small></button>
+        <button class="actionTile" data-action="routine" data-name="finanzas"><span>💰</span><strong>Finanzas</strong><small class="muted">Gastos, presupuesto y ahorro</small></button>
       </div>
     </div>
   </div>

@@ -2,13 +2,18 @@
   'use strict';
 
   const STORAGE = 'assistant-phone-v6-minimal-state'; // mantener para no perder datos
-  const APP_VERSION = 'v8-competitive-local';
+  const APP_VERSION = 'v12';
   const $ = (id) => document.getElementById(id);
   const qs = (sel, root = document) => root.querySelector(sel);
   const qsa = (sel, root = document) => [...root.querySelectorAll(sel)];
   const uid = (p = 'id') => `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const esc = (v) => String(v ?? '').replace(/[&<>'"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const safeId = (v, fallback = uid('id')) => /^[a-zA-Z0-9_-]{1,80}$/.test(String(v || '')) ? String(v) : fallback;
+  const safeColor = (v, fallback = '#7c5cfc') => /^#[0-9a-fA-F]{6}$/.test(String(v || '')) ? String(v) : fallback;
+  const safeChoice = (v, allowed, fallback) => allowed.includes(String(v || '')) ? String(v) : fallback;
+  const safeText = (v, max = 280) => String(v ?? '').slice(0, max);
+  const safeIcon = (v, fallback = '✨') => String(v || fallback).slice(0, 4);
 
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DOW = ['Do','Lu','Ma','Mi','Ju','Vi','Sa'];
@@ -49,7 +54,7 @@
       { id:'other', name:'Otros', icon:'📦', color:'#f472b6', budget:250 }
     ];
     return {
-      settings:{ onboarded:false, userName:'Byron', assistantName:'Jarvis', accent:'#7c5cfc', theme:'auto', density:'comfortable', mode:'simple', currency:'USD', pinEnabled:false, privacyMode:false, profile:'Personal', homeLayout:'minimal', showMonthCalendar:false, deviceNotifications:false, plannerEnergy:'normal', plannerMinutes:60 },
+      settings:{ onboarded:false, userName:'Byron', assistantName:'Jarvis', accent:'#7c5cfc', theme:'auto', density:'comfortable', mode:'simple', currency:'USD', pinEnabled:false, privacyMode:false, profile:'Personal', homeLayout:'minimal', showMonthCalendar:false, deviceNotifications:false, plannerEnergy:'normal', plannerMinutes:60, useCase:'personal', modules:{tasks:true,calendar:true,habits:true,finance:true,notes:true,wellness:false,study:false,work:false,home:false,business:false,senior:false} },
       projects:[
         {id:'personal', name:'Personal', icon:'🌱', color:'#00d68f', profile:'Personal'},
         {id:'work', name:'Trabajo', icon:'💼', color:'#38bdf8', profile:'Trabajo'},
@@ -71,7 +76,7 @@
       xp:0,
       streak:0,
       pom:{seconds:1500,total:1500,running:false,mode:'work',sessions:0},
-      view:'home',
+      view:'today',
       taskFilter:'all',projectFilter:'all',calendar:{year:new Date().getFullYear(),month:new Date().getMonth(),selected:t}
     };
   }
@@ -81,13 +86,17 @@
   let speech = null;
   let deferredPrompt = null;
   let pinEntry = '';
+  let alarmTimer = null;
+  let alarmCurrentActions = [];
+  let alarmAudioCtx = null;
+  let alarmAudioUnlocked = false;
 
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE);
       if (!raw) return makeDefaults();
       const parsed = JSON.parse(raw);
-      return mergeDeep(makeDefaults(), parsed);
+      return sanitizeState(mergeDeep(makeDefaults(), parsed));
     } catch { return makeDefaults(); }
   }
   function mergeDeep(base, incoming) {
@@ -97,9 +106,104 @@
     if (incoming && typeof incoming === 'object') Object.keys(incoming).forEach(k => out[k] = mergeDeep(base[k], incoming[k]));
     return out;
   }
-  function save() { localStorage.setItem(STORAGE, JSON.stringify(state)); }
-  function sync() { save(); applyTheme(); render(); }
-  function toast(msg, ms=2600) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('show'), ms); }
+  function sanitizeState(input) {
+    const base = makeDefaults();
+    const st = mergeDeep(base, input || {});
+    st.settings = mergeDeep(base.settings, st.settings || {});
+    st.settings.userName = safeText(st.settings.userName || 'Usuario', 40);
+    st.settings.assistantName = safeText(st.settings.assistantName || 'Jarvis', 40);
+    st.settings.accent = safeColor(st.settings.accent, '#7c5cfc');
+    st.settings.theme = safeChoice(st.settings.theme, ['auto','dark','light','neon','exec'], 'auto');
+    st.settings.density = safeChoice(st.settings.density, ['comfortable','compact','large'], 'comfortable');
+    st.settings.mode = safeChoice(st.settings.mode, ['simple','advanced'], 'simple');
+    st.settings.currency = safeChoice(st.settings.currency, Object.keys(CURRENCY), 'USD');
+    st.settings.useCase = safeChoice(st.settings.useCase, ['personal','student','freelance','home','wellness','finance','business','senior'], 'personal');
+    st.settings.modules = (st.settings.modules && typeof st.settings.modules === 'object') ? st.settings.modules : {};
+    st.projects = (Array.isArray(st.projects) ? st.projects : base.projects).slice(0, 50).map((p, i) => ({
+      id: safeId(p.id, base.projects[i]?.id || uid('project')),
+      name: safeText(p.name || 'Proyecto', 60),
+      icon: safeIcon(p.icon, '📁'),
+      color: safeColor(p.color, '#7c5cfc'),
+      profile: safeText(p.profile || 'Personal', 40)
+    }));
+    st.categories = (Array.isArray(st.categories) ? st.categories : base.categories).slice(0, 50).map((c, i) => ({
+      id: safeId(c.id, base.categories[i]?.id || uid('cat')),
+      name: safeText(c.name || 'Categoría', 60),
+      icon: safeIcon(c.icon, '📦'),
+      color: safeColor(c.color, '#7c5cfc'),
+      budget: Math.max(0, Number(c.budget) || 0)
+    }));
+    const projectIds = st.projects.map(p=>p.id);
+    const catIds = st.categories.map(c=>c.id);
+    st.tasks = (Array.isArray(st.tasks) ? st.tasks : []).slice(0, 5000).map(t => ({
+      id: safeId(t.id, uid('task')),
+      title: safeText(t.title || 'Tarea', 160),
+      note: safeText(t.note || '', 2000),
+      priority: safeChoice(t.priority, ['alta','media','baja'], 'media'),
+      project: projectIds.includes(t.project) ? t.project : projectIds[0],
+      due: /^\d{4}-\d{2}-\d{2}$/.test(String(t.due || '')) ? t.due : today(),
+      estimate: Math.max(0, Math.min(1440, Number(t.estimate) || 0)),
+      reminder: normalizeTime(t.reminder),
+      repeat: safeChoice(t.repeat, ['never','daily','weekly','monthly'], 'never'),
+      status: safeChoice(t.status, ['todo','doing','done'], t.done ? 'done' : 'todo'),
+      private: !!t.private,
+      done: !!t.done,
+      createdAt: /^\d{4}-\d{2}-\d{2}$/.test(String(t.createdAt || '')) ? t.createdAt : today(),
+      completedAt: /^\d{4}-\d{2}-\d{2}$/.test(String(t.completedAt || '')) ? t.completedAt : null,
+      xpAwarded: !!t.xpAwarded,
+      repeatGeneratedFor: safeText(t.repeatGeneratedFor || '', 20),
+      subtasks: (Array.isArray(t.subtasks) ? t.subtasks : []).slice(0, 100).map(s => ({id:safeId(s.id, uid('sub')), text:safeText(s.text || '', 180), done:!!s.done}))
+    }));
+    st.events = (Array.isArray(st.events) ? st.events : []).slice(0, 5000).map(e => ({
+      id: safeId(e.id, uid('event')),
+      title: safeText(e.title || 'Evento', 160),
+      location: safeText(e.location || '', 300),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(e.date || '')) ? e.date : today(),
+      start: normalizeTime(e.start) || '09:00',
+      end: normalizeTime(e.end) || '10:00',
+      color: safeColor(e.color, '#38bdf8'),
+      reminder: normalizeTime(e.reminder)
+    }));
+    st.transactions = (Array.isArray(st.transactions) ? st.transactions : []).slice(0, 5000).map(f => ({
+      id: safeId(f.id, uid('fin')),
+      desc: safeText(f.desc || 'Transacción', 120),
+      amount: Math.max(0, Number(f.amount) || 0),
+      type: safeChoice(f.type, ['expense','income'], 'expense'),
+      cat: catIds.includes(f.cat) ? f.cat : catIds[0],
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(f.date || '')) ? f.date : today()
+    }));
+    st.habits = (Array.isArray(st.habits) ? st.habits : []).slice(0, 200).map(h => ({
+      id: safeId(h.id, uid('habit')),
+      name: safeText(h.name || 'Hábito', 100),
+      icon: safeIcon(h.icon, '✨'),
+      goal: Math.max(1, Math.min(10000, Number(h.goal) || 1)),
+      unit: safeText(h.unit || 'vez', 30),
+      color: safeColor(h.color, '#00d68f'),
+      reminder: normalizeTime(h.reminder),
+      log: (h.log && typeof h.log === 'object') ? Object.fromEntries(Object.entries(h.log).filter(([k]) => /^\d{4}-\d{2}-\d{2}$/.test(k)).map(([k,v]) => [k, Math.max(0, Number(v)||0)])) : {}
+    }));
+    st.notes = (Array.isArray(st.notes) ? st.notes : []).slice(0, 2000).map(n => ({id:safeId(n.id, uid('note')), title:safeText(n.title || 'Nota', 160), body:safeText(n.body || '', 5000), createdAt:safeText(n.createdAt || today(), 20), updatedAt:safeText(n.updatedAt || '', 20)}));
+    st.notifications = (Array.isArray(st.notifications) ? st.notifications : []).slice(0, 50).map(n => ({type:safeText(n.type||'info',20), icon:safeIcon(n.icon,'🔔'), title:safeText(n.title||'Notificación',120), text:safeText(n.text||'',300), actions:Array.isArray(n.actions)?n.actions.slice(0,4):[]}));
+    st.alarmLog = (st.alarmLog && typeof st.alarmLog === 'object') ? st.alarmLog : {};
+    return st;
+  }
+  function save() {
+    try {
+      const data = JSON.stringify(state);
+      localStorage.setItem(STORAGE, data);
+      // Warn if approaching 4MB (localStorage limit ~5MB)
+      if (data.length > 3_800_000 && !save._warned) {
+        save._warned = true;
+        toast('⚠️ Almacenamiento casi lleno. Exporta un backup y limpia datos antiguos.', 6000);
+      }
+      if (typeof scheduleNativeReminderSyncDebounced === 'function') scheduleNativeReminderSyncDebounced();
+    } catch(e) {
+      // QuotaExceededError
+      toast('❌ Sin espacio de almacenamiento. Exporta un backup y limpia datos.', 7000);
+    }
+  }
+  function sync() { save(); applyTheme(); render(); scheduleNextAlarmCheck(); }
+  function toast(msg, ms=2600) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(()=>{ el.classList.remove('show'); el.textContent=''; }, ms); }
 
   function applyTheme() {
     const s = state.settings;
@@ -125,7 +229,7 @@
   function money(n, opts={}) {
     if (state.settings.privacyMode && opts.private) return '••••';
     const symbol = CURRENCY[state.settings.currency] || '$';
-    const decimals = ['COP','CLP'].includes(state.settings.currency) ? 0 : 0;
+    const decimals = ['COP','CLP'].includes(state.settings.currency) ? 0 : 2;
     return `${symbol}${Number(n||0).toLocaleString('es', {minimumFractionDigits:decimals, maximumFractionDigits:decimals})}`;
   }
   function project(id) { return state.projects.find(p => p.id === id) || state.projects[0]; }
@@ -147,42 +251,49 @@
   function habitsDoneToday() { return state.habits.filter(h => Number(h.log[today()] || 0) >= Number(h.goal || 1)).length; }
 
   function getViews() {
-    const base = [
-      {id:'home',label:'Inicio',icon:'🏠',sub:'Simple y limpio'},
+    // Hoy es el centro principal. El resto queda accesible sin saturar.
+    return [
       {id:'today',label:'Hoy',icon:'☀️',sub:'Lo necesario para hoy'},
+      {id:'home',label:'Inicio',icon:'🏠',sub:'Simple y limpio'},
       {id:'tasks',label:'Tareas',icon:'✅',sub:'Lista simple'},
       {id:'calendar',label:'Calendario',icon:'📅',sub:'Agenda primero'},
-      {id:'assistant',label:state.settings.assistantName,icon:'🤖',sub:'Asistente local sin API'},
-      {id:'settings',label:'Config',icon:'⚙️',sub:'Personalización, backup e instalación'}
+      {id:'more',label:'Más',icon:'•••',sub:'Hábitos, finanzas, notas y ajustes'}
     ];
-    const advanced = [
-      {id:'finance',label:'Dinero',icon:'💰',sub:'Balance, presupuesto y gastos'},
-      {id:'habits',label:'Hábitos',icon:'🌱',sub:'Salud, rachas y ánimo'},
-      {id:'notes',label:'Notas',icon:'📝',sub:'Ideas rápidas y convertir en tareas'},
-      {id:'kanban',label:'Kanban',icon:'🗂️',sub:'Flujo de trabajo'},
-      {id:'insights',label:'Insights',icon:'📊',sub:'Resumen semanal y patrones'}
-    ];
-    if (state.settings.mode === 'advanced') base.splice(4, 0, ...advanced);
-    return base;
+  }
+  function viewMeta(id) {
+    return ({
+      home:{id:'home',label:'Inicio',icon:'🏠',sub:'Simple y limpio'},
+      today:{id:'today',label:'Hoy',icon:'☀️',sub:'Lo necesario para hoy'},
+      tasks:{id:'tasks',label:'Tareas',icon:'✅',sub:'Lista simple'},
+      calendar:{id:'calendar',label:'Calendario',icon:'📅',sub:'Agenda primero'},
+      more:{id:'more',label:'Más',icon:'•••',sub:'Hábitos, finanzas, notas y ajustes'},
+      assistant:{id:'assistant',label:state.settings.assistantName,icon:'🤖',sub:'Asistente local sin API'},
+      finance:{id:'finance',label:'Dinero',icon:'💰',sub:'Balance y presupuesto'},
+      habits:{id:'habits',label:'Hábitos',icon:'🌱',sub:'Rutinas y bienestar'},
+      notes:{id:'notes',label:'Notas',icon:'📝',sub:'Ideas rápidas'},
+      kanban:{id:'kanban',label:'Kanban',icon:'🗂️',sub:'Flujo de trabajo'},
+      insights:{id:'insights',label:'Insights',icon:'📊',sub:'Resumen semanal'},
+      settings:{id:'settings',label:'Configuración',icon:'⚙️',sub:'Personalización, backup e instalación'}
+    })[id] || ({id:'home',label:'Inicio',icon:'🏠',sub:'Simple y limpio'});
   }
   function setView(id) {
-    const advancedOnly = ['finance','habits','kanban','insights'];
-    if (!getViews().some(v=>v.id===id) && advancedOnly.includes(id)) state.settings.mode = 'advanced';
-    state.view = id; save(); render(); setTimeout(()=>$('content')?.focus(),0);
+    const allowed = ['home','today','tasks','calendar','more','assistant','finance','habits','notes','kanban','insights','settings'];
+    state.view = allowed.includes(id) ? id : 'home';
+    save(); render(); setTimeout(()=>$('content')?.focus(),0);
   }
   function renderNav() {
     const views = getViews();
     const btns = views.map(v=>`<button class="navBtn ${state.view===v.id?'active':''}" data-view="${v.id}" type="button"><span class="navIcon">${v.icon}</span><span>${esc(v.label)}</span></button>`).join('');
     $('side-nav').innerHTML = btns;
-    const mobile = ['home','today','tasks','calendar','assistant'].map(id => views.find(v=>v.id===id)).filter(Boolean);
+    const mobile = ['today','home','tasks','calendar','more'].map(id => views.find(v=>v.id===id)).filter(Boolean);
     $('mobile-nav').innerHTML = mobile.map(v=>`<button class="navBtn ${state.view===v.id?'active':''}" data-view="${v.id}" type="button"><span class="navIcon">${v.icon}</span><span>${esc(v.label)}</span></button>`).join('');
   }
   function render() {
     applyTheme(); renderNav();
-    const view = getViews().find(v=>v.id===state.view) || getViews()[0];
+    const view = viewMeta(state.view);
     $('page-title').textContent = view.label;
     $('page-subtitle').textContent = view.sub;
-    const map = {home:renderHome,today:renderToday,tasks:renderTasks,calendar:renderCalendar,finance:renderFinance,habits:renderHabits,notes:renderNotes,kanban:renderKanban,assistant:renderAssistant,insights:renderInsights,settings:renderSettings};
+    const map = {home:renderHome,today:renderToday,tasks:renderTasks,calendar:renderCalendar,more:renderMore,finance:renderFinance,habits:renderHabits,notes:renderNotes,kanban:renderKanban,assistant:renderAssistant,insights:renderInsights,settings:renderSettings};
     $('content').innerHTML = (map[view.id] || renderHome)();
     attachViewEvents(view.id);
   }
@@ -201,7 +312,7 @@
   }
 
   function hasAnyData() {
-    return state.tasks.length || state.events.length || state.habits.length || state.transactions.length;
+    return state.tasks.length || state.events.length || state.habits.length || state.transactions.length || state.notes.length;
   }
   function dashboardSummaryText() {
     const parts = [];
@@ -324,7 +435,7 @@
     return out.concat(state.notifications || []);
   }
   function renderNotification(n) {
-    const acts = (n.actions||[]).map(a=>`<button class="chip" data-action="${esc(a.action)}" type="button">${esc(a.label)}</button>`).join('');
+    const acts = (n.actions||[]).map(a=>`<button class="chip" data-action="${esc(a.action)}" ${a.id?`data-id="${esc(a.id)}"`:''} ${a.days?`data-days="${esc(a.days)}"`:''} type="button">${esc(a.label)}</button>`).join('');
     return `<div class="listItem"><div class="row"><span>${esc(n.icon||'🔔')}</span><div><strong>${esc(n.title)}</strong><div class="muted small">${esc(n.text)}</div></div></div>${acts?`<div class="row wrap" style="margin-top:8px">${acts}</div>`:''}</div>`;
   }
   function renderTaskMini(t, showProject=false) {
@@ -382,21 +493,54 @@
     const todayList = pendingTasks().filter(t=>t.due===today()).sort(sortTasks);
     const events = state.events.filter(e=>e.date===today()).sort((a,b)=>a.start.localeCompare(b.start));
     const habits = state.habits.filter(h => Number(h.log[today()] || 0) < Number(h.goal || 1));
+    const next = recommendTask();
     const hasToday = overdue.length || todayList.length || events.length || habits.length;
+    const dayMode = renderDayMode(next, overdue, events, habits);
     if (!hasAnyData()) {
-      return `${renderEmptyClean('☀️','Hoy está vacío','Agrega una tarea o evento para empezar a construir tu día.','new-task','Crear tarea')}${renderAddStrip('Planear hoy')}`;
+      return `<section class="minimalHero dayHero"><div class="heroSmall">${esc(useCaseLabel())}</div><h2>${greeting()}, ${esc(state.settings.userName)}</h2><p>Tu día empieza limpio. Captura cualquier cosa con una frase y la app la organiza.</p><div class="row wrap"><button class="btn primary" data-action="open-capture" type="button">＋ Captura universal</button><button class="btn ghost" data-action="open-templates" type="button">Usar plantilla</button></div></section>${renderCaptureBox('Captura universal')}${renderFocusProfiles(true)}${renderAddStrip('Agregar manualmente')}`;
     }
     if (!hasToday) {
-      return `${renderEmptyClean('✨','Nada pendiente hoy','No tienes tareas, eventos ni hábitos pendientes para hoy.','open-quick','Agregar algo')}${renderAddStrip('Agregar para hoy')}`;
+      return `<section class="minimalHero dayHero"><div class="heroSmall">${esc(useCaseLabel())}</div><h2>Hoy está tranquilo</h2><p>No tienes tareas, eventos ni hábitos pendientes. Puedes planear algo nuevo o dejar el día libre.</p><div class="row wrap"><button class="btn primary" data-action="open-planner" type="button">Planear mi día</button><button class="btn ghost" data-action="open-capture" type="button">Capturar algo</button></div></section>${renderDailyWidgets()}${renderAddStrip('Agregar para hoy')}`;
     }
     const sections = [];
-    if (overdue.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Vencidas</h3><button class="chip danger" data-action="move-overdue" type="button">Mover a mañana</button></div><div class="stack">${overdue.map(t=>renderTaskMini(t,true)).join('')}</div></section>`);
-    if (todayList.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Tareas de hoy</h3><button class="chip" data-action="new-task" type="button">＋</button></div><div class="stack">${todayList.map(t=>renderTaskMini(t,true)).join('')}</div></section>`);
+    sections.push(dayMode);
+    if (overdue.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Necesita atención</h3><button class="chip danger" data-action="move-overdue" type="button">Mover a mañana</button></div><div class="stack">${overdue.slice(0,4).map(t=>renderTaskMini(t,true)).join('')}</div>${overdue.length>4?`<p class="muted small">Y ${overdue.length-4} más.</p>`:''}</section>`);
+    if (todayList.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Tareas de hoy</h3><button class="chip" data-action="new-task" type="button">＋</button></div><div class="stack">${todayList.slice(0,6).map(t=>renderTaskMini(t,true)).join('')}</div>${todayList.length>6?`<button class="btn ghost full" data-view="tasks" type="button">Ver todas</button>`:''}</section>`);
     if (events.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Agenda</h3><button class="chip" data-action="new-event" data-date="${today()}" type="button">＋</button></div><div class="agendaList">${events.map(renderEventMini).join('')}</div></section>`);
-    if (habits.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Hábitos</h3><button class="chip" data-action="new-habit" type="button">＋</button></div><div class="simpleHabitList">${habits.map(h=>`<div class="simpleHabit"><span>${h.icon} ${esc(h.name)}</span><button class="chip" data-action="habit-inc" data-id="${h.id}" type="button">Marcar</button></div>`).join('')}</div></section>`);
+    if (habits.length) sections.push(`<section class="card cleanCard"><div class="between"><h3 class="sectionTitle">Hábitos pendientes</h3><button class="chip" data-action="new-habit" type="button">＋</button></div><div class="simpleHabitList">${habits.slice(0,6).map(h=>`<div class="simpleHabit"><span>${h.icon} ${esc(h.name)}</span><button class="chip" data-action="habit-inc" data-id="${h.id}" type="button">Marcar</button></div>`).join('')}</div></section>`);
     const quickTime = pendingTasks().length ? `<section class="card cleanCard"><h3 class="sectionTitle">Tengo tiempo para...</h3><div class="row wrap"><button class="btn ghost" data-action="time-filter" data-min="5">5 min</button><button class="btn ghost" data-action="time-filter" data-min="15">15 min</button><button class="btn ghost" data-action="time-filter" data-min="30">30 min</button><button class="btn ghost" data-action="time-filter" data-min="60">1 hora</button></div><div id="time-suggestions" style="margin-top:12px"></div></section>` : '';
-    return `<section class="pageIntro"><h2>Hoy</h2><p>${esc(dashboardSummaryText())}</p></section>${renderCaptureBox('Agregar a hoy con una frase')}<div class="linearStack">${sections.join('')}${quickTime}</div>${renderAddStrip('Agregar al día')}`;
+    return `<section class="pageIntro"><h2>Hoy</h2><p>${esc(dashboardSummaryText())}</p></section>${renderCaptureBox('Agregar a hoy con una frase')}<div class="linearStack">${sections.join('')}${quickTime}${renderDailyWidgets()}</div>${renderAddStrip('Agregar al día')}`;
   }
+
+  function renderDayMode(next, overdue, events, habits) {
+    const steps = [];
+    if (overdue.length) steps.push(`Reprograma ${overdue.length} vencida${overdue.length===1?'':'s'}`);
+    if (next) steps.push(`Empieza con “${next.title}”`);
+    if (events[0]) steps.push(`Próximo evento: ${events[0].start} ${events[0].title}`);
+    if (habits.length) steps.push(`Marca ${habits.length} hábito${habits.length===1?'':'s'}`);
+    if (!steps.length) steps.push('Captura una prioridad para hoy');
+    return `<section class="card cleanCard dayModeCard"><div class="between"><h3 class="sectionTitle">Modo Día</h3><button class="chip" data-action="open-planner" type="button">Planear</button></div><div class="daySteps">${steps.slice(0,4).map((x,i)=>`<div><b>${i+1}</b><span>${esc(x)}</span></div>`).join('')}</div><div class="row wrap"><button class="btn primary" data-action="${next?'focus':'open-capture'}" ${next?`data-id="${next.id}"`:''} type="button">${next?'Empezar siguiente':'Capturar prioridad'}</button><button class="btn ghost" data-action="share-day" type="button">Compartir día</button></div></section>`;
+  }
+
+  function renderDailyWidgets() {
+    const widgets = [];
+    const daily = dailyAvailable();
+    if (state.transactions.length) widgets.push(`<div class="softWidget"><span>💰 Dinero diario</span><strong>${money(Math.max(0,daily),{private:true})}</strong></div>`);
+    if (state.habits.length) widgets.push(`<div class="softWidget"><span>🌱 Hábitos</span><strong>${habitsDoneToday()}/${state.habits.length}</strong></div>`);
+    if (state.notes?.length) widgets.push(`<div class="softWidget"><span>📝 Notas</span><strong>${state.notes.length}</strong></div>`);
+    return widgets.length ? `<section class="widgetRow">${widgets.join('')}</section>` : '';
+  }
+
+  function useCaseLabel() {
+    const map = {personal:'Asistente personal',student:'Modo estudiante',freelance:'Modo freelance',home:'Modo hogar',wellness:'Modo bienestar',finance:'Modo finanzas',business:'Modo negocio',senior:'Recordatorios simples'};
+    return map[state.settings.useCase] || 'Asistente personal';
+  }
+
+  function renderFocusProfiles(compact=false) {
+    const profiles = getUseCaseProfiles();
+    return `<section class="card cleanCard"><h3 class="sectionTitle">Elige una dirección</h3><p class="muted small">La app puede adaptarse a distintos usos sin llenarse de pantallas.</p><div class="profileGrid ${compact?'compactProfiles':''}">${profiles.map(p=>`<button class="profileTile ${state.settings.useCase===p.id?'active':''}" data-action="apply-usecase" data-case="${p.id}" type="button"><span>${p.icon}</span><strong>${esc(p.title)}</strong><small>${esc(p.short)}</small></button>`).join('')}</div></section>`;
+  }
+
   function generateDayPlan() {
     const items = [];
     state.events.filter(e=>e.date===today()).forEach(e=>items.push({time:e.start,title:e.title,meta:`Evento · ${e.location||'Sin ubicación'}`}));
@@ -547,7 +691,27 @@
     const week = Array.from({length:7},(_,i)=>{const d=addDays(i-6); return {d,done:state.tasks.filter(t=>t.done&&t.completedAt===d).length, mood:state.moods[d]};});
     const totalDone = week.reduce((s,x)=>s+x.done,0);
     const max = Math.max(1,...week.map(x=>x.done));
-    return `<section class="grid four"><div class="card kpi"><span>Completadas semana</span><strong>${totalDone}</strong></div><div class="card kpi"><span>Pomodoros</span><strong>${state.pom.sessions}</strong></div><div class="card kpi"><span>XP</span><strong>${state.xp}</strong></div><div class="card kpi"><span>Racha</span><strong>${state.streak}</strong></div></section>
+    const pomMins = Math.floor(state.pom.seconds/60);
+    const pomSecs = String(state.pom.seconds%60).padStart(2,'0');
+    const pomPct = Math.round((1 - state.pom.seconds/state.pom.total)*100);
+    return `<section class="grid four"><div class="card kpi"><span>Completadas semana</span><strong>${totalDone}</strong></div><div class="card kpi"><span>Pomodoros</span><strong>${state.pom.sessions}</strong></div><div class="card kpi"><span>XP</span><strong>${state.xp}</strong></div><div class="card kpi"><span>Sesión actual</span><strong>${state.pom.mode==='work'?'Trabajo':'Descanso'}</strong></div></section>
+      <section class="card" style="margin-top:var(--space)"><h3 class="sectionTitle">Temporizador Pomodoro</h3>
+        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+          <div class="pomCircle" id="pom-circle" style="--p:${pomPct}%"><div class="pomInner"><div class="pomTime" id="pom-display">${pomMins}:${pomSecs}</div><div class="small muted" id="pom-mode-lbl">${state.pom.mode==='work'?'Trabajo':'Descanso'}</div></div></div>
+          <div style="flex:1;min-width:160px">
+            <div class="muted small" style="margin-bottom:12px">Sesiones completadas: <strong>${state.pom.sessions}</strong></div>
+            <div class="row wrap">
+              <button class="btn primary" id="pom-start" type="button">${state.pom.running?'⏸ Pausar':'▶ Iniciar'}</button>
+              <button class="btn ghost" id="pom-reset" type="button">↺ Reiniciar</button>
+            </div>
+            <div class="row wrap" style="margin-top:8px">
+              <button class="chip ${state.pom.mode==='work'?'on':''}" id="pom-work" type="button">🍅 25 min</button>
+              <button class="chip ${state.pom.mode==='short'?'on':''}" id="pom-short" type="button">☕ 5 min</button>
+              <button class="chip ${state.pom.mode==='long'?'on':''}" id="pom-long" type="button">🛋 15 min</button>
+            </div>
+          </div>
+        </div>
+      </section>
       <section class="card" style="margin-top:var(--space)"><h3 class="sectionTitle">Dashboard semanal</h3><div style="display:flex;align-items:end;gap:8px;height:120px">${week.map(x=>`<div style="flex:1;text-align:center"><div class="small muted">${x.done}</div><div style="height:${Math.max(8,x.done/max*82)}px;background:${x.d===today()?'var(--accent)':'var(--panel2)'};border-radius:8px 8px 0 0"></div><div class="small faint">${DOW[parseLocal(x.d).getDay()]}</div></div>`).join('')}</div></section>
       <section class="grid two" style="margin-top:var(--space)"><div class="card"><h3 class="sectionTitle">Patrones</h3>${insightList().map(x=>`<div class="listItem"><strong>${x.icon} ${esc(x.title)}</strong><div class="muted small">${esc(x.text)}</div></div>`).join('')}</div><div class="card"><h3 class="sectionTitle">Productividad por proyecto</h3>${state.projects.map(p=>{const ts=state.tasks.filter(t=>t.project===p.id);const done=ts.filter(t=>t.done).length;const pct=ts.length?Math.round(done/ts.length*100):0;return `<div class="listItem"><div class="between"><span>${p.icon} ${esc(p.name)}</span><strong>${pct}%</strong></div><div class="bar"><div class="fill" style="background:${p.color};width:${pct}%"></div></div></div>`}).join('')}</div></section>`;
   }
@@ -562,8 +726,30 @@
   }
   function weakHabit() { return [...state.habits].sort((a,b)=>habitStreak(a)-habitStreak(b))[0]; }
 
+  function renderMore() {
+    const cards = [
+      ['🤖','Asistente','Comandos locales, plan del día y prioridades','assistant'],
+      ['🌱','Hábitos','Rutinas, metas diarias y ánimo','habits'],
+      ['💰','Dinero','Gastos, ingresos y presupuesto','finance'],
+      ['📝','Notas','Ideas rápidas y convertir en tarea','notes'],
+      ['🗂️','Kanban','Organiza tareas por estado','kanban'],
+      ['📊','Insights','Pomodoro, estadísticas e insights','insights'],
+      ['⚙️','Configuración','Apariencia, backup e instalación','settings']
+    ];
+    return `<section class="pageIntro"><h2>Más</h2><p>Funciones extra sin saturar el inicio. Cambia el enfoque de la app, crea rutinas o revisa módulos avanzados.</p></section>
+      ${renderFocusProfiles()}
+      <section class="card cleanCard" style="margin-top:var(--space)"><div class="between"><h3 class="sectionTitle">Automatizaciones simples</h3><span class="chip">Local</span></div><div class="actionGrid smallActions">
+        <button class="actionTile" data-action="automation" data-name="weekly-review"><span>🗓️</span><strong>Revisión semanal</strong><small class="muted">Crea una tarea cada lunes</small></button>
+        <button class="actionTile" data-action="automation" data-name="reprogram-overdue"><span>↪️</span><strong>Reprogramar vencidas</strong><small class="muted">Mueve atrasos a mañana</small></button>
+        <button class="actionTile" data-action="automation" data-name="budget-check"><span>💰</span><strong>Chequeo de presupuesto</strong><small class="muted">Crea una revisión mensual</small></button>
+        <button class="actionTile" data-action="automation" data-name="daily-priority"><span>🎯</span><strong>Prioridad diaria</strong><small class="muted">Crea una tarea para elegir foco</small></button>
+      </div></section>
+      <section class="moreGrid" style="margin-top:var(--space)">${cards.map(([icon,title,sub,view])=>`<button class="moreTile" data-view="${view}" type="button"><span>${icon}</span><strong>${esc(title)}</strong><small>${esc(sub)}</small></button>`).join('')}</section>
+      <section class="card cleanCard" style="margin-top:var(--space)"><h3 class="sectionTitle">Resumen rápido</h3><div class="simpleMetrics">${renderSimpleMetric('Tareas', String(state.tasks.length))}${renderSimpleMetric('Eventos', String(state.events.length))}${renderSimpleMetric('Hábitos', String(state.habits.length))}${renderSimpleMetric('Notas', String(state.notes.length))}</div></section>`;
+  }
+
   function renderSettings() {
-    return `<section class="grid two"><div class="card"><h3 class="sectionTitle">Apariencia</h3><div class="field"><label>Nombre</label><input class="input" id="set-user" value="${esc(state.settings.userName)}"></div><div class="field"><label>Asistente</label><input class="input" id="set-assistant" value="${esc(state.settings.assistantName)}"></div><div class="grid two"><div class="field"><label>Color</label><input class="input color" id="set-accent" type="color" value="${esc(state.settings.accent)}"></div><div class="field"><label>Moneda</label><select class="input" id="set-currency">${Object.keys(CURRENCY).map(c=>`<option ${state.settings.currency===c?'selected':''}>${c}</option>`).join('')}</select></div></div><div class="grid two"><div class="field"><label>Tema</label><select class="input" id="set-theme"><option value="auto">Automático</option><option value="dark">Oscuro</option><option value="light">Claro</option><option value="neon">Neón</option><option value="exec">Ejecutivo</option></select></div><div class="field"><label>Tamaño</label><select class="input" id="set-density"><option value="comfortable">Cómodo</option><option value="compact">Compacto</option><option value="large">Grande</option></select></div></div><div class="grid two"><div class="field"><label>Modo</label><select class="input" id="set-mode"><option value="simple">Simple</option><option value="advanced">Avanzado</option></select></div><div class="field"><label>Perfil</label><select class="input" id="set-profile"><option>Personal</option><option>Trabajo</option><option>Escuela</option><option>Negocio</option></select></div></div><label class="checkRow"><input id="set-pin" type="checkbox" ${state.settings.pinEnabled?'checked':''}> PIN visual 1234</label><button class="btn ghost full" data-action="request-notifications" type="button">🔔 Activar notificaciones del dispositivo</button><p class="muted small">Las alarmas usan una hora específica. Siempre aparecen dentro de la app; las notificaciones del iPhone dependen del permiso del navegador y funcionan mejor si la app está instalada.</p><button class="btn primary full" data-action="save-settings">Guardar cambios</button></div>
+    return `<section class="grid two"><div class="card"><h3 class="sectionTitle">Apariencia</h3><div class="field"><label>Nombre</label><input class="input" id="set-user" value="${esc(state.settings.userName)}"></div><div class="field"><label>Asistente</label><input class="input" id="set-assistant" value="${esc(state.settings.assistantName)}"></div><div class="grid two"><div class="field"><label>Color</label><input class="input color" id="set-accent" type="color" value="${esc(state.settings.accent)}"></div><div class="field"><label>Moneda</label><select class="input" id="set-currency">${Object.keys(CURRENCY).map(c=>`<option ${state.settings.currency===c?'selected':''}>${c}</option>`).join('')}</select></div></div><div class="grid two"><div class="field"><label>Tema</label><select class="input" id="set-theme"><option value="auto">Automático</option><option value="dark">Oscuro</option><option value="light">Claro</option><option value="neon">Neón</option><option value="exec">Ejecutivo</option></select></div><div class="field"><label>Tamaño</label><select class="input" id="set-density"><option value="comfortable">Cómodo</option><option value="compact">Compacto</option><option value="large">Grande</option></select></div></div><div class="grid two"><div class="field"><label>Modo</label><select class="input" id="set-mode"><option value="simple">Simple</option><option value="advanced">Avanzado</option></select></div><div class="field"><label>Perfil</label><select class="input" id="set-profile"><option>Personal</option><option>Trabajo</option><option>Escuela</option><option>Negocio</option></select></div></div><div class="field"><label>Enfoque de app</label><select class="input" id="set-usecase"><option value="personal">Personal diario</option><option value="student">Estudiante</option><option value="freelance">Freelance / trabajo</option><option value="home">Hogar / familia</option><option value="wellness">Hábitos y bienestar</option><option value="finance">Finanzas simples</option><option value="business">Pequeño negocio</option><option value="senior">Recordatorios simples</option></select></div><label class="checkRow"><input id="set-pin" type="checkbox" ${state.settings.pinEnabled?'checked':''}> Activar PIN visual</label><div id="pin-change-section" class="field"><label for="set-new-pin">Cambiar PIN</label><div class="captureRow"><input class="input" id="set-new-pin" inputmode="numeric" placeholder="Nuevo PIN"><button class="btn ghost" id="pin-change-btn" type="button">Actualizar</button></div><small class="fieldHint">El PIN es privacidad visual local. No cifra los datos.</small></div><button class="btn ghost full" data-action="request-notifications" type="button">🔔 Activar notificaciones del dispositivo</button><p class="muted small">Las alarmas usan una hora específica. Siempre aparecen dentro de la app; las notificaciones del iPhone dependen del permiso del navegador y funcionan mejor si la app está instalada.</p><button class="btn primary full" data-action="save-settings">Guardar cambios</button></div>
       <div class="card"><h3 class="sectionTitle">Backup e instalación</h3><div class="stack"><button class="btn primary" data-action="export-backup">Exportar backup JSON</button><label class="btn ghost" for="import-file" style="text-align:center">Importar backup JSON</label><input id="import-file" type="file" accept="application/json" class="hidden"><button class="btn ghost" data-action="install-help">Cómo instalar en iPhone</button><button class="btn danger" data-action="reset-app">Reiniciar app</button></div><div class="helpBox" style="margin-top:12px">Para instalar: sube esta carpeta a GitHub Pages, Netlify o Vercel. Abre la URL en Safari y toca Compartir → Agregar a pantalla de inicio.</div></div></section>
       <section class="card" style="margin-top:var(--space)"><h3 class="sectionTitle">Modo simple vs avanzado</h3><p class="muted">Simple muestra lo esencial. Avanzado activa finanzas, hábitos, Kanban e insights semanales.</p><div class="row wrap"><button class="btn ghost" data-action="set-simple">Modo simple</button><button class="btn ghost" data-action="set-advanced">Modo avanzado</button></div></section>`;
   }
@@ -571,8 +757,34 @@
   function attachViewEvents(view) {
     if (view === 'assistant') { setTimeout(()=>{const log=$('chat-log'); if(log) log.scrollTop=log.scrollHeight;},0); }
     if (view === 'settings') {
-      $('set-theme').value = state.settings.theme; $('set-density').value = state.settings.density; $('set-mode').value = state.settings.mode; $('set-profile').value = state.settings.profile;
+      $('set-theme').value = state.settings.theme; $('set-density').value = state.settings.density; $('set-mode').value = state.settings.mode; $('set-profile').value = state.settings.profile; const uc=$('set-usecase'); if(uc) uc.value=state.settings.useCase || 'personal';
       $('import-file')?.addEventListener('change', importBackup);
+      // PIN change UI
+      const pinSection = $('pin-change-section');
+      if (pinSection) {
+        $('pin-change-btn')?.addEventListener('click', () => {
+          const np = $('set-new-pin')?.value?.trim();
+          if (!np || np.length < 4) return toast('El PIN debe tener al menos 4 dígitos');
+          if (!/^\d+$/.test(np)) return toast('El PIN solo puede contener números');
+          setNewPin(np);
+        });
+      }
+    }
+    if (view === 'insights') {
+      $('pom-start')?.addEventListener('click', () => {
+        state.pom.running = !state.pom.running;
+        if (state.pom.running) startPomTimer(); else stopPomTimer();
+        save(); render();
+      });
+      $('pom-reset')?.addEventListener('click', () => {
+        stopPomTimer(); state.pom.running = false;
+        state.pom.seconds = state.pom.total;
+        save(); render();
+      });
+      $('pom-work')?.addEventListener('click', () => { stopPomTimer(); state.pom.mode='work'; state.pom.total=1500; state.pom.seconds=1500; state.pom.running=false; save(); render(); });
+      $('pom-short')?.addEventListener('click', () => { stopPomTimer(); state.pom.mode='short'; state.pom.total=300; state.pom.seconds=300; state.pom.running=false; save(); render(); });
+      $('pom-long')?.addEventListener('click', () => { stopPomTimer(); state.pom.mode='long'; state.pom.total=900; state.pom.seconds=900; state.pom.running=false; save(); render(); });
+      if (state.pom.running) startPomTimer();
     }
   }
 
@@ -580,7 +792,7 @@
   function closeModals() { qsa('.modalBack').forEach(m=>m.classList.remove('show')); document.body.classList.remove('modalOpen'); }
   function openQuick() {
     $('quick-actions').innerHTML = [
-      ['⚡','Captura rápida','Escribe una frase','open-capture'],['✅','Tarea','Algo por hacer','new-task'],['📅','Evento','Agenda una hora','new-event'],['🌱','Hábito','Crea una rutina','new-habit'],['💸','Gasto','Registra dinero','new-finance'],['📝','Nota','Idea rápida','new-note'],['🧭','Planear mi día','Energía y tiempo','open-planner'],['📋','Plantillas','Rutinas listas','open-templates'],['📤','Compartir hoy','Copiar o enviar','share-day'],['⌕','Buscar','Encuentra algo','open-search']
+      ['⚡','Captura rápida','Escribe una frase','open-capture'],['✅','Tarea','Algo por hacer','new-task'],['📅','Evento','Agenda una hora','new-event'],['🌱','Hábito','Crea una rutina','new-habit'],['💸','Gasto','Registra dinero','new-finance'],['📝','Nota','Idea rápida','new-note'],['🧭','Planear mi día','Energía y tiempo','open-planner'],['📋','Plantillas','Rutinas listas','open-templates'],['🧩','Cambiar enfoque','Estudiante, hogar, negocio','view-more'],['⚙️','Automatizar','Revisiones y rutinas','view-more'],['📤','Compartir hoy','Copiar o enviar','share-day'],['⌕','Buscar','Encuentra algo','open-search']
     ].map(([icon,title,sub,action])=>`<button class="actionTile" data-action="${action}"><span>${icon}</span><strong>${title}</strong><small class="muted">${sub}</small></button>`).join('');
     openModal('quick-modal');
   }
@@ -600,25 +812,63 @@
   }
   function smartCapture(text) {
     const low = text.toLowerCase().trim();
-    if (/^(nota|idea)/.test(low)) {
-      const title = text.replace(/^(nota|idea)[:\s-]*/i,'').trim() || 'Nota rápida';
+    const time = extractTimeOfDay(low) || '';
+    const date = parseNaturalDate(low) || today();
+    if (/^(nota|idea|apunte)\b/.test(low)) {
+      const title = text.replace(/^(nota|idea|apunte)[:\s-]*/i,'').trim() || 'Nota rápida';
       state.notes ||= [];
       state.notes.unshift({id:uid('note'),title,body:'',createdAt:today()});
       sync(); toast('📝 Nota guardada'); return;
     }
+    if (/\b(examen|prueba|parcial)\b/.test(low)) {
+      const title = text.replace(/\b(examen|prueba|parcial)\b/ig,'').replace(dateWordsRegex(),'').replace(timeRegex(),'').trim() || 'Examen';
+      state.events.push({id:uid('event'),title:`Examen: ${title}`,location:'',date,start:time || '09:00',end:time?addMinutes(time,60):'10:00',color:'#ffb340',reminder:time || ''});
+      ensureProject('study','Estudio','📚','#9b7ffe','Escuela');
+      sync(); toast('📚 Examen agregado'); return;
+    }
+    if (/\b(clase|curso|reunión|reunion|cita|evento)\b/.test(low)) {
+      const title = text.replace(/^(crear|crea|agregar|agrega)?\s*(evento|cita|reunión|reunion|clase|curso)?/i,'').replace(dateWordsRegex(),'').replace(timeRegex(),'').trim() || 'Evento';
+      state.events.push({id:uid('event'),title,location:'',date,start:time || '09:00',end:time?addMinutes(time,60):'10:00',color:'#38bdf8',reminder:time || ''});
+      sync(); toast('📅 Evento creado'); return;
+    }
+    if (/\b(gasto|gasté|gaste|pagué|pague|compré|compre)\b/.test(low)) {
+      const amt = extractAmount(low) || 0;
+      const desc = text.replace(/\b(gasto|gasté|gaste|pagué|pague|compré|compre)\b/ig,'').replace(/[\$€S\/]*\d+(?:[\.,]\d+)?/g,'').trim() || 'Gasto rápido';
+      const cat = guessCategory(low);
+      state.transactions.push({id:uid('fin'),desc,amount:amt,type:'expense',cat,date:today()});
+      sync(); toast('💸 Gasto registrado'); return;
+    }
+    if (/\b(cobrar|cobro|cliente|pago pendiente)\b/.test(low)) {
+      ensureProject('clients','Clientes','🤝','#38bdf8','Trabajo');
+      const amount = extractAmount(low);
+      const title = text.replace(dateWordsRegex(),'').replace(timeRegex(),'').trim();
+      state.tasks.push(baseTask({title, note: amount?`Monto: ${money(amount)}`:'Seguimiento de cliente', priority:'alta', project:'clients', due:date, reminder:time, estimate:15}));
+      sync(); toast('🤝 Seguimiento creado'); return;
+    }
+    if (/\b(medicina|medicamento|pastilla|tomar)\b/.test(low)) {
+      ensureProject('health','Salud','❤️','#ff4d6d','Personal');
+      const title = text.replace(dateWordsRegex(),'').replace(timeRegex(),'').trim() || 'Tomar medicina';
+      state.tasks.push(baseTask({title, note:'Recordatorio de salud', priority:'alta', project:'health', due:date, reminder:time, repeat: low.includes('diario') || low.includes('todos') ? 'daily':'never', estimate:5}));
+      sync(); toast('💊 Recordatorio creado'); return;
+    }
     if (low.includes('hábito') || low.includes('habito') || low.includes('diario') || low.includes('todos los días')) {
-      const title = text.replace(/^(crea|crear|agrega|agregar)?\s*(hábito|habito)?/i,'').replace(/\b(diario|todos los días|cada día)\b/ig,'').replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g,'').replace(/\b(\d{1,2})\s*(am|pm)\b/ig,'').trim() || 'Nuevo hábito';
-      state.habits.push({id:uid('habit'),name:title,icon:'✨',goal:1,unit:'vez',color:state.settings.accent,reminder:extractTimeOfDay(low)||'',log:{}});
+      const title = text.replace(/^(crea|crear|agrega|agregar)?\s*(hábito|habito)?/i,'').replace(/\b(diario|todos los días|cada día)\b/ig,'').replace(timeRegex(),'').trim() || 'Nuevo hábito';
+      state.habits.push({id:uid('habit'),name:title,icon:'✨',goal:1,unit:'vez',color:state.settings.accent,reminder:time,log:{}});
       sync(); toast('🌱 Hábito creado'); return;
     }
-    if (low.includes('gasto') || low.includes('evento') || /^\s*(crea|crear|agrega|agregar|nueva|nuevo)\s+tarea/.test(low)) {
-      const r = assistantReply(text,true); sync(); toast(r.text); return;
-    }
-    const due = parseNaturalDate(low) || today();
-    const title = text.replace(/\b(hoy|mañana|pasado mañana|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b/ig,'').replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g,'').replace(/\b(\d{1,2})\s*(am|pm)\b/ig,'').trim() || 'Nueva tarea';
-    state.tasks.push({id:uid('task'),title,note:'Creada desde captura rápida',priority:low.includes('urgente')?'alta':'media',project:'personal',due,estimate:extractMinutes(low)||25,reminder:extractTimeOfDay(low)||'',repeat:'never',status:'todo',private:false,done:false,createdAt:today(),completedAt:null,xpAwarded:false,subtasks:[]});
+    const title = text.replace(dateWordsRegex(),'').replace(timeRegex(),'').trim() || 'Nueva tarea';
+    const project = /\b(casa|hogar|comprar|compra|supermercado|limpiar)\b/.test(low) ? ensureProject('home','Hogar','🏠','#ffb340','Personal') : /\b(escuela|estudiar|tarea escolar|universidad)\b/.test(low) ? ensureProject('study','Estudio','📚','#9b7ffe','Escuela') : 'personal';
+    state.tasks.push(baseTask({title,note:'Creada desde captura universal',priority:low.includes('urgente')?'alta':'media',project,due:date,estimate:extractMinutes(low)||25,reminder:time}));
     sync(); toast('✅ Tarea creada');
   }
+
+  function baseTask(data={}) {
+    return {id:uid('task'),title:data.title||'Nueva tarea',note:data.note||'',priority:data.priority||'media',project:data.project||'personal',due:data.due||today(),estimate:Number(data.estimate||25),reminder:data.reminder||'',repeat:data.repeat||'never',status:'todo',private:false,done:false,createdAt:today(),completedAt:null,xpAwarded:false,subtasks:[]};
+  }
+  function timeRegex(){ return /\b([01]?\d|2[0-3]):([0-5]\d)\b|\b(1[0-2]|0?[1-9])\s*(am|pm)\b/ig; }
+  function dateWordsRegex(){ return /\b(hoy|mañana|pasado mañana|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|próxima semana|proxima semana|la semana que viene|próximo mes|proximo mes)\b/ig; }
+  function extractAmount(text){ const m=String(text).replace(',','.').match(/(?:\$|€|s\/)?\s*(\d+(?:\.\d+)?)/i); return m?Number(m[1]):0; }
+  function guessCategory(text){ const low=String(text).toLowerCase(); const cats=state.categories; const find=(id)=>cats.find(c=>c.id===id)?.id || cats[0]?.id || 'other'; if(/comida|super|mercado|restaurante|café|cafe/.test(low)) return find('food'); if(/casa|renta|luz|agua|internet/.test(low)) return find('home'); if(/gas|uber|transporte|bus|metro/.test(low)) return find('transport'); if(/doctor|farmacia|salud|medicina/.test(low)) return find('health'); if(/cine|netflix|juego|salida/.test(low)) return find('fun'); return find('other'); }
 
   function openPlanner() {
     $('planner-energy').value = state.settings.plannerEnergy || 'normal';
@@ -719,10 +969,12 @@
     const id = $('task-id').value;
     const old = state.tasks.find(t=>t.id===id);
     const subtasks = $('task-subtasks').value.split('\n').map(x=>x.trim()).filter(Boolean).map((text,i)=>({id:old?.subtasks?.[i]?.id || uid('sub'), text, done:old?.subtasks?.[i]?.done || false}));
-    const data = {title:$('task-title').value.trim(),note:$('task-note').value.trim(),priority:$('task-priority').value,project:$('task-project').value,due:$('task-due').value,estimate:Number($('task-estimate').value)||0,reminder:normalizeTime($('task-reminder').value),repeat:$('task-repeat').value,private:$('task-private').checked,subtasks};
-    if (!data.title) return;
+    const estimate = Math.max(0, Number($('task-estimate').value) || 0);
+    const due = /^\d{4}-\d{2}-\d{2}$/.test($('task-due').value) ? $('task-due').value : today();
+    const data = {title:$('task-title').value.trim(),note:$('task-note').value.trim(),priority:safeChoice($('task-priority').value,['alta','media','baja'],'media'),project:$('task-project').value,due,estimate,reminder:normalizeTime($('task-reminder').value),repeat:safeChoice($('task-repeat').value,['never','daily','weekly','monthly'],'never'),private:$('task-private').checked,subtasks};
+    if (!data.title) return toast('Escribe un título para la tarea');
     if (old) Object.assign(old, data);
-    else state.tasks.push({id:uid('task'),status:'todo',done:false,createdAt:today(),completedAt:null,xpAwarded:false,...data});
+    else state.tasks.push({id:uid('task'),status:'todo',done:false,createdAt:today(),completedAt:null,xpAwarded:false,repeatGeneratedFor:'',...data});
     closeModals(); sync(); toast(old?'Tarea actualizada':'Tarea creada');
   }
 
@@ -733,31 +985,102 @@
     $('event-date').value = e?.date || date || state.calendar.selected || today(); $('event-color').value = e?.color || '#38bdf8'; $('event-start').value = e?.start || '09:00'; $('event-end').value = e?.end || '10:00'; $('event-reminder').value = normalizeTime(e?.reminder || '');
     $('delete-event').style.visibility = e ? 'visible' : 'hidden'; openModal('event-modal');
   }
-  function saveEventForm(e) { e.preventDefault(); const id=$('event-id').value; const old=state.events.find(x=>x.id===id); const data={title:$('event-title').value.trim(),location:$('event-location').value.trim(),date:$('event-date').value,start:$('event-start').value,end:$('event-end').value,color:$('event-color').value,reminder:normalizeTime($('event-reminder').value)}; if(!data.title)return; if(old)Object.assign(old,data); else state.events.push({id:uid('event'),...data}); closeModals(); sync(); toast('Evento guardado'); }
+  function saveEventForm(e) {
+    e.preventDefault();
+    const id=$('event-id').value;
+    const old=state.events.find(x=>x.id===id);
+    const data={title:$('event-title').value.trim(),location:$('event-location').value.trim(),date:$('event-date').value,start:normalizeTime($('event-start').value)||'09:00',end:normalizeTime($('event-end').value)||'10:00',color:safeColor($('event-color').value,'#38bdf8'),reminder:normalizeTime($('event-reminder').value)};
+    if(!data.title) return toast('Escribe un título para el evento');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return toast('Elige una fecha válida');
+    if(data.end <= data.start) return toast('La hora de fin debe ser después del inicio');
+    if(old) Object.assign(old,data); else state.events.push({id:uid('event'),...data});
+    closeModals(); sync(); toast('Evento guardado');
+  }
 
   function openFinanceForm(id=null) {
     const f = id ? state.transactions.find(x=>x.id===id) : null;
     $('finance-title-modal').textContent = f ? 'Editar transacción' : 'Nueva transacción'; $('finance-id').value=f?.id||''; $('finance-desc').value=f?.desc||''; $('finance-amount').value=f?.amount||''; $('finance-type').value=f?.type||'expense'; $('finance-cat').innerHTML=state.categories.map(c=>`<option value="${c.id}">${c.icon} ${esc(c.name)}</option>`).join(''); $('finance-cat').value=f?.cat||state.categories[0].id; $('finance-date').value=f?.date||today(); $('delete-finance').style.visibility=f?'visible':'hidden'; openModal('finance-modal');
   }
-  function saveFinanceForm(e) { e.preventDefault(); const id=$('finance-id').value; const old=state.transactions.find(x=>x.id===id); const data={desc:$('finance-desc').value.trim(),amount:Number($('finance-amount').value)||0,type:$('finance-type').value,cat:$('finance-cat').value,date:$('finance-date').value}; if(!data.desc||!data.amount)return; if(old)Object.assign(old,data); else state.transactions.push({id:uid('fin'),...data}); closeModals(); sync(); toast('Transacción guardada'); }
+  function saveFinanceForm(e) {
+    e.preventDefault();
+    const id=$('finance-id').value;
+    const old=state.transactions.find(x=>x.id===id);
+    const data={desc:$('finance-desc').value.trim(),amount:Math.max(0,Number($('finance-amount').value)||0),type:safeChoice($('finance-type').value,['expense','income'],'expense'),cat:$('finance-cat').value,date:$('finance-date').value};
+    if(!data.desc) return toast('Escribe una descripción');
+    if(data.amount <= 0) return toast('El monto debe ser mayor que 0');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) return toast('Elige una fecha válida');
+    if(old) Object.assign(old,data); else state.transactions.push({id:uid('fin'),...data});
+    closeModals(); sync(); toast('Transacción guardada');
+  }
 
   function openHabitForm(id=null) {
     const h = id ? state.habits.find(x=>x.id===id) : null;
     $('habit-id').value=h?.id||''; $('habit-name').value=h?.name||''; $('habit-icon').value=h?.icon||'✨'; $('habit-goal').value=h?.goal||1; $('habit-unit').value=h?.unit||'vez'; $('habit-color').value=h?.color||'#00d68f'; $('habit-reminder').value=h?.reminder||''; $('delete-habit').style.visibility=h?'visible':'hidden'; openModal('habit-modal');
   }
-  function saveHabitForm(e) { e.preventDefault(); const id=$('habit-id').value; const old=state.habits.find(x=>x.id===id); const data={name:$('habit-name').value.trim(),icon:$('habit-icon').value.trim()||'✨',goal:Number($('habit-goal').value)||1,unit:$('habit-unit').value.trim()||'vez',color:$('habit-color').value,reminder:normalizeTime($('habit-reminder').value)}; if(!data.name)return; if(old)Object.assign(old,data); else state.habits.push({id:uid('habit'),log:{},...data}); closeModals(); sync(); toast('Hábito guardado'); }
+  function saveHabitForm(e) {
+    e.preventDefault();
+    const id=$('habit-id').value;
+    const old=state.habits.find(x=>x.id===id);
+    const data={name:$('habit-name').value.trim(),icon:safeIcon($('habit-icon').value.trim()||'✨'),goal:Math.max(1,Number($('habit-goal').value)||1),unit:safeText($('habit-unit').value.trim()||'vez',30),color:safeColor($('habit-color').value,'#00d68f'),reminder:normalizeTime($('habit-reminder').value)};
+    if(!data.name) return toast('Escribe un nombre para el hábito');
+    if(old) Object.assign(old,data); else state.habits.push({id:uid('habit'),log:{},...data});
+    closeModals(); sync(); toast('Hábito guardado');
+  }
 
+  function nextRepeatDate(due, repeat) {
+    if (!due || repeat === 'never') return '';
+    const d = parseLocal(due);
+    if (repeat === 'daily') d.setDate(d.getDate() + 1);
+    if (repeat === 'weekly') d.setDate(d.getDate() + 7);
+    if (repeat === 'monthly') d.setMonth(d.getMonth() + 1);
+    return localDate(d);
+  }
+  function createNextRepeat(t) {
+    if (!t || !t.done || t.repeat === 'never' || !t.due) return;
+    if (t.repeatGeneratedFor === t.due) return;
+    const nextDue = nextRepeatDate(t.due, t.repeat);
+    if (!nextDue) return;
+    const exists = state.tasks.some(x => x.parentRepeatId === t.id && x.due === nextDue);
+    if (exists) return;
+    const clone = {...t, id:uid('task'), due:nextDue, done:false, status:'todo', completedAt:null, xpAwarded:false, repeatGeneratedFor:'', parentRepeatId:t.id, createdAt:today(), subtasks:(t.subtasks||[]).map(s=>({...s, id:uid('sub'), done:false}))};
+    state.tasks.push(clone);
+    t.repeatGeneratedFor = t.due;
+    pushAlarm(`repeat:${t.id}:${t.due}`, '🔄', 'Tarea repetida', `Se creó la siguiente: ${t.title} (${fmtDate(nextDue)})`, [{label:'Ver tareas',action:'view-tasks'}]);
+  }
   function completeTask(id) {
-    const t = state.tasks.find(x=>x.id===id); if(!t) return;
-    t.done = !t.done; t.status = t.done ? 'done' : 'todo'; t.completedAt = t.done ? today() : null;
+    const t = state.tasks.find(x=>x.id===id);
+    if (!t) return;
+    t.done = !t.done;
+    t.status = t.done ? 'done' : 'todo';
+    t.completedAt = t.done ? today() : null;
     if (t.done && !t.xpAwarded) { state.xp += 10; t.xpAwarded = true; toast('✅ Completada · +10 XP'); }
     else toast(t.done?'Tarea completada':'Tarea reabierta');
+    if (t.done) createNextRepeat(t);
     sync();
   }
   function deleteItem(type, id) {
-    const map = {task:'tasks',event:'events',finance:'transactions',habit:'habits',note:'notes'}; const arr = state[map[type]]; const i = arr.findIndex(x=>x.id===id); if(i<0)return;
-    if (!confirm('¿Eliminar este elemento?')) return;
-    state.undo = {type, item:arr[i], at:Date.now()}; arr.splice(i,1); closeModals(); sync(); toast('Eliminado. Puedes deshacer desde notificaciones.');
+    const map = {task:'tasks',event:'events',finance:'transactions',habit:'habits',note:'notes'};
+    const arr = state[map[type]]; const i = arr.findIndex(x=>x.id===id); if(i<0)return;
+    state.undo = {type, item:arr[i], at:Date.now()}; arr.splice(i,1); closeModals(); sync();
+    showDeleteToast();
+  }
+  function showConfirmToast(msg, onConfirm) {
+    const el = $('toast');
+    el.innerHTML = esc(msg) + ' <button id="confirm-yes-btn" style="background:var(--danger);border:none;color:#fff;border-radius:99px;padding:3px 12px;cursor:pointer;font:inherit;font-size:12px;margin-left:8px">Confirmar</button>';
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.classList.remove('show'); el.textContent = ''; }, 5000);
+    const btn = $('confirm-yes-btn');
+    if (btn) btn.addEventListener('click', () => { el.classList.remove('show'); el.textContent = ''; clearTimeout(toast._t); onConfirm(); });
+  }
+  function showDeleteToast() {
+    const el = $('toast');
+    el.innerHTML = 'Eliminado. <button id="undo-inline-btn" style="background:transparent;border:1px solid rgba(255,255,255,.3);color:inherit;border-radius:99px;padding:3px 10px;cursor:pointer;font:inherit;font-size:12px;margin-left:8px">Deshacer</button>';
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.classList.remove('show'); el.textContent = ''; }, 4000);
+    const btn = $('undo-inline-btn');
+    if (btn) btn.addEventListener('click', () => { undoDelete(); el.classList.remove('show'); el.textContent = ''; clearTimeout(toast._t); });
   }
   function undoDelete() {
     if(!state.undo) return toast('Nada que deshacer');
@@ -802,9 +1125,26 @@
     return {text:`Entendido: “${msg}”. Puedo ayudarte con tareas, calendario, finanzas, hábitos, prioridades y plan del día.`,actions:[{label:'Plan del día',action:'assistant:plan'},{label:'Qué hago primero',action:'assistant:first'}]};
   }
   function parseNaturalDate(text) {
-    if (text.includes('pasado mañana')) return addDays(2); if (text.includes('mañana')) return addDays(1); if (text.includes('hoy')) return today();
+    const t = String(text).toLowerCase();
+    if (t.includes('pasado mañana')) return addDays(2);
+    if (t.includes('mañana')) return addDays(1);
+    if (t.includes('hoy')) return today();
+    if (t.includes('próxima semana') || t.includes('proxima semana') || t.includes('la semana que viene')) return addDays(7);
+    if (t.includes('próximo mes') || t.includes('proximo mes')) return addDays(30);
+    if (t.includes('en 2 días') || t.includes('en dos días') || t.includes('en 2 dias')) return addDays(2);
+    if (t.includes('en 3 días') || t.includes('en tres días') || t.includes('en 3 dias')) return addDays(3);
+    if (t.includes('en una semana') || t.includes('en 1 semana') || t.includes('en 7 días')) return addDays(7);
+    // dd/mm or dd-mm-yyyy patterns
+    let m = t.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+    if (m) {
+      const day = parseInt(m[1]), mon = parseInt(m[2]);
+      const yr = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3])) : new Date().getFullYear();
+      if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) return localDate(new Date(yr, mon - 1, day));
+    }
     const names = [['domingo',0],['lunes',1],['martes',2],['miércoles',3],['miercoles',3],['jueves',4],['viernes',5],['sábado',6],['sabado',6]];
-    const hit = names.find(([n])=>text.includes(n)); if(!hit)return null; const now=new Date(); let diff=hit[1]-now.getDay(); if(diff<=0)diff+=7; return addDays(diff);
+    const hit = names.find(([n])=>t.includes(n));
+    if (!hit) return null;
+    const now = new Date(); let diff = hit[1] - now.getDay(); if (diff <= 0) diff += 7; return addDays(diff);
   }
   function extractMinutes(text) { const m=text.match(/(\d+)\s*(min|minutos|m)/); return m?Number(m[1]):null; }
   function addMinutes(time, mins) { const [h,m]=time.split(':').map(Number); const d=new Date(2000,0,1,h,m+mins); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
@@ -859,28 +1199,97 @@
     if (action === 'request-notifications') return requestNotifications();
     if (action === 'export-backup') return exportBackup();
     if (action === 'install-help') return alert('En iPhone: sube la carpeta a una URL HTTPS, abre en Safari, toca Compartir y luego “Agregar a pantalla de inicio”.');
-    if (action === 'reset-app') { if(confirm('¿Borrar todos los datos locales?')){localStorage.removeItem(STORAGE); location.reload();} return; }
+    if (action === 'reset-app') { showConfirmToast('¿Borrar TODOS los datos?', () => { localStorage.removeItem(STORAGE); location.reload(); }); return; }
+    if (action === 'view-more') return setView('more');
+    if (action === 'apply-usecase') return applyUseCase(el.dataset.case || 'personal');
+    if (action === 'automation') return runAutomation(el.dataset.name);
     if (action === 'set-simple') { state.settings.mode='simple'; sync(); return; }
     if (action === 'set-advanced') { state.settings.mode='advanced'; sync(); return; }
   }
+
+  function getUseCaseProfiles() {
+    return [
+      {id:'personal',icon:'☀️',title:'Personal diario',short:'Tareas, agenda y notas'},
+      {id:'student',icon:'📚',title:'Estudiante',short:'Clases, exámenes y estudio'},
+      {id:'freelance',icon:'💼',title:'Freelance',short:'Clientes, entregas y cobros'},
+      {id:'home',icon:'🏠',title:'Hogar',short:'Familia, compras y casa'},
+      {id:'wellness',icon:'🌱',title:'Bienestar',short:'Hábitos, ánimo y salud'},
+      {id:'finance',icon:'💰',title:'Finanzas',short:'Gastos y presupuesto'},
+      {id:'business',icon:'🏪',title:'Negocio',short:'Citas, cobros e inventario'},
+      {id:'senior',icon:'🔔',title:'Recordatorios',short:'Simple, grande y claro'}
+    ];
+  }
+  function ensureProject(id, name, icon, color, profile='Personal') {
+    const found = state.projects.find(p=>p.id===id);
+    if (found) return found.id;
+    state.projects.push({id,name,icon,color,profile});
+    return id;
+  }
+  function ensureCategory(id, name, icon, color, budget=100) {
+    const found = state.categories.find(c=>c.id===id);
+    if (found) return found.id;
+    state.categories.push({id,name,icon,color,budget});
+    return id;
+  }
+  function applyUseCase(id) {
+    state.settings.useCase = id;
+    const setup = {
+      personal:()=>{state.settings.mode='simple';},
+      student:()=>{state.settings.profile='Escuela'; ensureProject('study','Estudio','📚','#9b7ffe','Escuela'); ensureProject('classes','Clases','🏫','#38bdf8','Escuela'); ensureProject('exams','Exámenes','🧪','#ffb340','Escuela'); state.settings.modules.study=true;},
+      freelance:()=>{state.settings.profile='Trabajo'; ensureProject('clients','Clientes','🤝','#38bdf8','Trabajo'); ensureProject('deliveries','Entregas','📦','#ffb340','Trabajo'); ensureProject('billing','Cobros','💰','#00d68f','Trabajo'); state.settings.modules.work=true;},
+      home:()=>{ensureProject('home','Hogar','🏠','#ffb340','Personal'); ensureProject('family','Familia','👨‍👩‍👧','#f472b6','Personal'); ensureCategory('groceries','Supermercado','🛒','#00d68f',400); state.settings.modules.home=true;},
+      wellness:()=>{ensureProject('health','Salud','❤️','#ff4d6d','Personal'); addHabitIfMissing('Agua','💧',8,'vasos','09:00','#38bdf8'); addHabitIfMissing('Caminar','🚶',20,'min','18:00','#00d68f'); state.settings.modules.wellness=true;},
+      finance:()=>{state.settings.mode='advanced'; ensureProject('money','Finanzas','💰','#9b7ffe','Personal'); state.settings.modules.finance=true;},
+      business:()=>{state.settings.profile='Negocio'; ensureProject('appointments','Citas','📅','#38bdf8','Negocio'); ensureProject('inventory','Inventario','📦','#ffb340','Negocio'); ensureProject('payments','Cobros','💰','#00d68f','Negocio'); state.settings.modules.business=true;},
+      senior:()=>{state.settings.density='large'; ensureProject('health','Salud','❤️','#ff4d6d','Personal'); addHabitIfMissing('Medicina','💊',1,'vez','08:00','#ff4d6d'); state.settings.modules.senior=true;}
+    }[id];
+    if (setup) setup();
+    sync(); toast(`Enfoque aplicado: ${useCaseLabel()}`);
+  }
+  function addHabitIfMissing(name, icon, goal, unit, reminder, color) {
+    if (state.habits.some(h=>h.name.toLowerCase()===name.toLowerCase())) return;
+    state.habits.push({id:uid('habit'),name,icon,goal,unit,color,reminder,log:{}});
+  }
+  function runAutomation(name) {
+    if (name === 'weekly-review') {
+      state.tasks.push(baseTask({title:'Revisión semanal',note:'Revisar pendientes, calendario, gastos y hábitos.',priority:'media',project:'personal',due:nextWeekday(1),reminder:'09:00',repeat:'weekly',estimate:20}));
+      sync(); return toast('🗓️ Revisión semanal creada');
+    }
+    if (name === 'reprogram-overdue') return moveOverdue();
+    if (name === 'budget-check') {
+      ensureProject('money','Finanzas','💰','#9b7ffe','Personal');
+      state.tasks.push(baseTask({title:'Revisar presupuesto mensual',note:'Comparar ingresos, gastos y dinero diario disponible.',priority:'media',project:'money',due:firstDayNextMonth(),reminder:'09:00',repeat:'monthly',estimate:20}));
+      sync(); return toast('💰 Chequeo de presupuesto creado');
+    }
+    if (name === 'daily-priority') {
+      state.tasks.push(baseTask({title:'Elegir prioridad del día',note:'Escoger una sola tarea principal para avanzar.',priority:'alta',project:'personal',due:today(),reminder:'08:30',repeat:'daily',estimate:5}));
+      sync(); return toast('🎯 Prioridad diaria creada');
+    }
+  }
+  function nextWeekday(day) { const d=new Date(); let diff=day-d.getDay(); if(diff<=0) diff+=7; return addDays(diff); }
+  function firstDayNextMonth(){ const d=new Date(); return localDate(new Date(d.getFullYear(), d.getMonth()+1, 1)); }
 
   function createRoutine(name) {
     const map = {
       'mañana':['Tomar agua','Revisar agenda','Elegir tarea principal'],
       'trabajo':['Revisar correos importantes','Bloque de enfoque 25 min','Actualizar pendientes'],
       'noche':['Preparar mañana','Registrar ánimo','Leer 10 minutos'],
-      'estudio':['Preparar material de estudio','Bloque de estudio 25 min','Repasar apuntes 10 min']
+      'estudio':['Preparar material de estudio','Bloque de estudio 25 min','Repasar apuntes 10 min'],
+      'compras':['Revisar despensa','Hacer lista de compras','Comprar lo necesario'],
+      'salud':['Tomar medicina','Caminar 20 minutos','Registrar ánimo'],
+      'negocio':['Revisar citas del día','Revisar cobros pendientes','Registrar gastos del negocio'],
+      'finanzas':['Registrar gastos de hoy','Revisar presupuesto','Separar ahorro']
     };
     (map[name]||[]).forEach(title=>state.tasks.push({id:uid('task'),title,note:`Rutina de ${name}`,priority:'media',project:'personal',due:today(),estimate:15,reminder:'',repeat:'never',status:'todo',private:false,done:false,createdAt:today(),completedAt:null,xpAwarded:false,subtasks:[]}));
     sync(); toast(`Rutina de ${name} creada`);
   }
 
   function saveSettings() {
-    Object.assign(state.settings, {userName:$('set-user').value.trim()||'Usuario', assistantName:$('set-assistant').value.trim()||'Jarvis', accent:$('set-accent').value, currency:$('set-currency').value, theme:$('set-theme').value, density:$('set-density').value, mode:$('set-mode').value, profile:$('set-profile').value, pinEnabled:$('set-pin').checked});
+    Object.assign(state.settings, {userName:$('set-user').value.trim()||'Usuario', assistantName:$('set-assistant').value.trim()||'Jarvis', accent:$('set-accent').value, currency:$('set-currency').value, theme:$('set-theme').value, density:$('set-density').value, mode:$('set-mode').value, profile:$('set-profile').value, pinEnabled:$('set-pin').checked, useCase: $('set-usecase')?.value || 'personal'});
     sync(); toast('Configuración guardada');
   }
   function exportBackup() { const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`assistant-phone-backup-${today()}.json`; a.click(); URL.revokeObjectURL(a.href); }
-  function importBackup(e) { const file=e.target.files?.[0]; if(!file)return; const r=new FileReader(); r.onload=()=>{try{state=mergeDeep(makeDefaults(),JSON.parse(r.result)); save(); sync(); toast('Backup importado');}catch{toast('Archivo inválido');}}; r.readAsText(file); }
+  function importBackup(e) { const file=e.target.files?.[0]; if(!file)return; const r=new FileReader(); r.onload=()=>{try{state=sanitizeState(mergeDeep(makeDefaults(),JSON.parse(r.result))); save(); sync(); toast('Backup importado y validado');}catch{toast('Archivo inválido');}}; r.readAsText(file); }
 
   function normalizeTime(value) {
     const raw = String(value || '').trim();
@@ -902,18 +1311,175 @@
   function canFire(target, now = Date.now()) {
     return target && now >= target && now - target < 6 * 60000;
   }
+  function isMissed(target, now = Date.now()) {
+    return target && now - target >= 6 * 60000 && now - target < 24 * 60 * 60000;
+  }
+  function unlockAlarmAudio() {
+    try {
+      if (!alarmAudioCtx) alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (alarmAudioCtx.state === 'suspended') alarmAudioCtx.resume();
+      alarmAudioUnlocked = true;
+    } catch {}
+  }
+  function playAlarmSound() {
+    try {
+      unlockAlarmAudio();
+      if (!alarmAudioCtx || alarmAudioCtx.state !== 'running') return;
+      const now = alarmAudioCtx.currentTime;
+      [0, .22, .44].forEach((offset) => {
+        const osc = alarmAudioCtx.createOscillator();
+        const gain = alarmAudioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now + offset);
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.22, now + offset + .02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + .16);
+        osc.connect(gain).connect(alarmAudioCtx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + .18);
+      });
+      navigator.vibrate?.([180, 80, 180]);
+    } catch {}
+  }
+  function nativeLocalNotifications() {
+    return window.Capacitor?.Plugins?.LocalNotifications || null;
+  }
+  function isNativeApp() {
+    return !!(window.Capacitor && (window.Capacitor.isNativePlatform?.() || window.Capacitor.getPlatform?.() === 'ios' || window.Capacitor.getPlatform?.() === 'android'));
+  }
+  function notificationIdFromKey(key) {
+    let h = 2166136261;
+    String(key).split('').forEach(ch => { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); });
+    return Math.abs(h % 2147483000) + 1000;
+  }
+  function scheduleNativeReminderSyncDebounced() {
+    if (!isNativeApp() || !nativeLocalNotifications()) return;
+    clearTimeout(scheduleNativeReminderSyncDebounced._t);
+    scheduleNativeReminderSyncDebounced._t = setTimeout(syncNativeReminders, 700);
+  }
+  async function syncNativeReminders() {
+    const LocalNotifications = nativeLocalNotifications();
+    if (!LocalNotifications || !state.settings.deviceNotifications) return;
+    const pending = [];
+    const now = Date.now();
+    state.tasks.forEach(t => {
+      if (t.done || !t.due || !t.reminder) return;
+      const at = timeToMs(t.due, t.reminder);
+      if (at > now + 1000) pending.push({ key:`task:${t.id}:${at}`, title:'✅ Tarea', body:t.title, at, view:'tasks' });
+    });
+    state.events.forEach(e => {
+      if (!e.date || !e.reminder) return;
+      const at = timeToMs(e.date, e.reminder);
+      if (at > now + 1000) pending.push({ key:`event:${e.id}:${at}`, title:'📅 Evento', body:`${e.title}${e.start ? ' · '+e.start : ''}`, at, view:'calendar' });
+    });
+    state.habits.forEach(h => {
+      if (!h.reminder) return;
+      const at = timeToMs(today(), h.reminder);
+      if (at > now + 1000 && Number(h.log?.[today()] || 0) < Number(h.goal || 1)) pending.push({ key:`habit:${h.id}:${at}`, title:'🌱 Hábito', body:h.name, at, view:'habits' });
+    });
+    try {
+      const existing = await LocalNotifications.getPending?.();
+      const ours = (existing?.notifications || []).filter(n => n?.extra?.assistantPhone === true || String(n?.title || '').includes('Assistant Phone'));
+      if (ours.length) await LocalNotifications.cancel({ notifications: ours.map(n => ({ id: n.id })) });
+    } catch {}
+    try {
+      if (pending.length) {
+        await LocalNotifications.schedule({ notifications: pending.slice(0, 64).map(n => ({
+          id: notificationIdFromKey(n.key),
+          title: n.title,
+          body: n.body,
+          schedule: { at: new Date(n.at) },
+          sound: 'default',
+          smallIcon: 'ic_stat_icon_config_sample',
+          extra: { assistantPhone: true, key: n.key, view: n.view }
+        })) });
+      }
+    } catch {}
+  }
+  async function sendNativeNotificationNow(key, icon, title, text) {
+    const LocalNotifications = nativeLocalNotifications();
+    if (!LocalNotifications) return false;
+    try {
+      await LocalNotifications.schedule({ notifications: [{
+        id: notificationIdFromKey(`now:${key}:${Date.now()}`),
+        title: `${icon || '🔔'} ${title || 'Recordatorio'}`,
+        body: text || '',
+        schedule: { at: new Date(Date.now() + 400) },
+        sound: 'default',
+        extra: { assistantPhone: true, key }
+      }] });
+      return true;
+    } catch { return false; }
+  }
+  async function sendDeviceNotification(key, icon, title, text) {
+    if (state.settings.deviceNotifications && await sendNativeNotificationNow(key, icon, title, text)) return true;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+    const options = {
+      body: text,
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      tag: key,
+      renotify: true,
+      requireInteraction: true,
+      data: { url: './index.html', key }
+    };
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg?.showNotification) { await reg.showNotification(`${icon} ${title}`, options); return true; }
+      }
+      new Notification(`${icon} ${title}`, options);
+      return true;
+    } catch { return false; }
+  }
+  function setAppBadgeCount() {
+    try {
+      const count = (state.notifications || []).length;
+      if ('setAppBadge' in navigator && count) navigator.setAppBadge(count);
+      else if ('clearAppBadge' in navigator) navigator.clearAppBadge();
+    } catch {}
+  }
+  function showAlarmOverlay(icon, title, text, actions = []) {
+    alarmCurrentActions = actions || [];
+    const box = $('alarm-modal');
+    if (!box) return;
+    $('alarm-icon').textContent = icon || '🔔';
+    $('alarm-title').textContent = title || 'Recordatorio';
+    $('alarm-text').textContent = text || '';
+    $('alarm-primary').style.display = alarmCurrentActions.length ? '' : 'none';
+    $('alarm-primary').textContent = alarmCurrentActions[0]?.label || 'Ver';
+    box.classList.add('show');
+  }
+  function closeAlarmOverlay() { $('alarm-modal')?.classList.remove('show'); alarmCurrentActions = []; }
+  function nextAlarmTargets(now = Date.now()) {
+    const out = [];
+    state.tasks.forEach(t => { if (!t.done && t.due && t.reminder) out.push(timeToMs(t.due, t.reminder)); });
+    state.events.forEach(e => { if (e.date && e.reminder) out.push(timeToMs(e.date, e.reminder)); });
+    state.habits.forEach(h => { if (h.reminder && Number(h.log?.[today()] || 0) < Number(h.goal || 1)) out.push(timeToMs(today(), h.reminder)); });
+    return out.filter(x => x && x >= now - 24*60*60000).sort((a,b)=>a-b);
+  }
+  function scheduleNextAlarmCheck() {
+    clearTimeout(alarmTimer);
+    const now = Date.now();
+    const next = nextAlarmTargets(now).find(x => x >= now - 60000);
+    if (!next) return;
+    const delay = clamp(next - now + 1000, 1000, 30 * 60 * 1000);
+    alarmTimer = setTimeout(() => { checkAlarms(); scheduleNextAlarmCheck(); }, delay);
+  }
   function pushAlarm(key, icon, title, text, actions = []) {
     state.alarmLog ||= {};
     if (state.alarmLog[key]) return false;
     state.alarmLog[key] = Date.now();
     state.notifications ||= [];
     state.notifications.unshift({type:'alarm', icon, title, text, actions});
-    state.notifications = state.notifications.slice(0, 20);
+    state.notifications = state.notifications.slice(0, 30);
     save();
-    toast(`${icon} ${title}: ${text}`, 5200);
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try { new Notification(title, { body:text, icon:'icons/icon-192.png', badge:'icons/icon-192.png' }); } catch {}
-    }
+    showAlarmOverlay(icon, title, text, actions);
+    playAlarmSound();
+    toast(`${icon} ${title}: ${text}`, 6200);
+    sendDeviceNotification(key, icon, title, text);
+    setAppBadgeCount();
+    scheduleNextAlarmCheck();
     return true;
   }
   function checkAlarms() {
@@ -922,26 +1488,53 @@
     state.tasks.forEach(t => {
       if (t.done || !t.due || !t.reminder) return;
       const target = timeToMs(t.due, t.reminder);
-      if (canFire(target, now)) pushAlarm(`task:${t.id}:${target}`, '✅', 'Tarea', t.title, [{label:'Ver tareas',action:'view-tasks'}]);
+      if (canFire(target, now)) pushAlarm(`task:${t.id}:${target}`, '✅', 'Tarea', t.title, [{label:'Completar',action:'toggle-task',id:t.id},{label:'Ver tareas',action:'view-tasks'}]);
+      else if (isMissed(target, now)) pushAlarm(`missed-task:${t.id}:${target}`, '⏰', 'Recordatorio perdido', `${t.title} era a las ${timeLabel(t.reminder)}`, [{label:'Mañana',action:'postpone',id:t.id},{label:'Ver tareas',action:'view-tasks'}]);
     });
     state.events.forEach(e => {
       if (!e.date || !e.reminder) return;
       const target = timeToMs(e.date, e.reminder);
       if (canFire(target, now)) pushAlarm(`event:${e.id}:${target}`, '📅', 'Evento', `${e.title} · ${e.start || timeLabel(e.reminder)}`, [{label:'Calendario',action:'view-calendar'}]);
+      else if (isMissed(target, now)) pushAlarm(`missed-event:${e.id}:${target}`, '⏰', 'Evento perdido', `${e.title} era a las ${timeLabel(e.reminder)}`, [{label:'Calendario',action:'view-calendar'}]);
     });
     state.habits.forEach(h => {
       if (!h.reminder || Number(h.log?.[today()] || 0) >= Number(h.goal || 1)) return;
       const target = timeToMs(today(), h.reminder);
       if (canFire(target, now)) pushAlarm(`habit:${h.id}:${target}`, '🌱', 'Hábito', h.name, [{label:'Hábitos',action:'view-habits'}]);
+      else if (isMissed(target, now)) pushAlarm(`missed-habit:${h.id}:${target}`, '⏰', 'Hábito perdido', `${h.name} era a las ${timeLabel(h.reminder)}`, [{label:'Hábitos',action:'view-habits'}]);
     });
   }
   async function requestNotifications() {
+    unlockAlarmAudio();
+    const LocalNotifications = nativeLocalNotifications();
+    if (LocalNotifications) {
+      try {
+        const perm = await LocalNotifications.requestPermissions();
+        const granted = perm?.display === 'granted' || perm?.display === 'prompt-with-rationale' || perm?.receive === 'granted';
+        state.settings.deviceNotifications = !!granted;
+        save();
+        if (granted) {
+          await syncNativeReminders();
+          await sendNativeNotificationNow(`test:${Date.now()}`, '🔔', 'Prueba de alarma', 'Notificaciones nativas activadas en Assistant Phone.');
+          toast('🔔 Notificaciones nativas activadas. Programé tus recordatorios futuros.', 5000);
+        } else {
+          toast('No se activaron las notificaciones. Revisa Ajustes del iPhone > Notificaciones.');
+        }
+        return;
+      } catch {
+        toast('No pude activar notificaciones nativas.');
+        return;
+      }
+    }
     if (!('Notification' in window)) return toast('Este navegador no permite notificaciones del dispositivo.');
     try {
       const p = await Notification.requestPermission();
       state.settings.deviceNotifications = p === 'granted';
       save();
-      toast(p === 'granted' ? '🔔 Notificaciones activadas' : 'No se activaron las notificaciones');
+      if (p === 'granted') {
+        toast('🔔 Notificaciones activadas. Enviaré una prueba en 5 segundos.', 4500);
+        setTimeout(() => pushAlarm(`test:${Date.now()}`, '🔔', 'Prueba de alarma', 'Si ves esto, los recordatorios están activos cuando la app está abierta.', []), 5000);
+      } else toast('No se activaron las notificaciones. Revisa Ajustes del iPhone > Notificaciones.');
     } catch { toast('No pude pedir permiso de notificaciones.'); }
   }
   function updateViewportVars() {
@@ -966,17 +1559,59 @@
 
   function initPinPad() { $('pin-pad').innerHTML = ['1','2','3','4','5','6','7','8','9','⌫','0','OK'].map(x=>`<button type="button" data-pin="${x}">${x}</button>`).join(''); }
   function updatePin() { qsa('#pin-dots span').forEach((d,i)=>d.classList.toggle('on',i<pinEntry.length)); }
-  function pinPress(v) { if(v==='⌫') pinEntry=pinEntry.slice(0,-1); else if(v==='OK'){ if(pinEntry==='1234'){pinEntry=''; updatePin(); $('lock').classList.remove('show'); toast('Desbloqueado');} else {$('pin-error').textContent='PIN incorrecto'; setTimeout(()=>{$('pin-error').textContent='';pinEntry='';updatePin();},800);} } else if(pinEntry.length<4) pinEntry+=v; updatePin(); }
+  async function hashPin(pin) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin + 'assistant-phone-salt'));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  async function pinPress(v) {
+    if (v==='⌫') { pinEntry=pinEntry.slice(0,-1); updatePin(); return; }
+    if (v==='OK') {
+      const stored = state.settings.pinHash;
+      // Migrate old default PIN on first unlock
+      if (!stored) {
+        const defaultHash = await hashPin('1234');
+        state.settings.pinHash = defaultHash; save();
+      }
+      const entered = await hashPin(pinEntry);
+      const expected = state.settings.pinHash || await hashPin('1234');
+      if (entered === expected) {
+        pinEntry=''; updatePin(); $('lock').classList.remove('show'); toast('Desbloqueado');
+      } else {
+        $('pin-error').textContent='PIN incorrecto';
+        setTimeout(()=>{ $('pin-error').textContent=''; pinEntry=''; updatePin(); }, 900);
+      }
+      return;
+    }
+    if (pinEntry.length < 6) { pinEntry+=v; updatePin(); }
+  }
+  async function setNewPin(pin) {
+    if (!pin || pin.length < 4) return;
+    state.settings.pinHash = await hashPin(pin);
+    save(); toast('PIN actualizado');
+  }
 
   function initSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     speech = new SR(); speech.lang='es-ES'; speech.continuous=false; speech.interimResults=false;
-    speech.onresult = (e)=> sendAssistant(e.results[0][0].transcript);
-    speech.onerror = ()=> toast('No pude escuchar. Intenta de nuevo.');
+    speech.onresult = (e) => {
+      const btn = $('voice-btn');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎙️'; }
+      sendAssistant(e.results[0][0].transcript);
+    };
+    speech.onend = () => {
+      const btn = $('voice-btn');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎙️'; }
+    };
+    speech.onerror = () => {
+      const btn = $('voice-btn');
+      if (btn) { btn.classList.remove('listening'); btn.textContent = '🎙️'; }
+      toast('No pude escuchar. Intenta de nuevo.');
+    };
   }
 
   function bindGlobalEvents() {
+    document.body.addEventListener('pointerdown', unlockAlarmAudio, {passive:true});
     document.body.addEventListener('click', (e)=>{
       const viewBtn = e.target.closest('[data-view]'); if(viewBtn){closeModals(); return setView(viewBtn.dataset.view);}
       const actionBtn = e.target.closest('[data-action]'); if(actionBtn){closeModals(); return runAction(actionBtn.dataset.action, actionBtn);}
@@ -987,7 +1622,7 @@
     });
     $('task-form').addEventListener('submit', saveTaskForm); $('event-form').addEventListener('submit', saveEventForm); $('finance-form').addEventListener('submit', saveFinanceForm); $('habit-form').addEventListener('submit', saveHabitForm); $('note-form').addEventListener('submit', saveNoteForm); $('capture-modal-form').addEventListener('submit', submitCaptureModal); $('planner-form').addEventListener('submit', submitPlannerForm);
     $('delete-task').addEventListener('click',()=>deleteItem('task',$('task-id').value)); $('delete-event').addEventListener('click',()=>deleteItem('event',$('event-id').value)); $('delete-finance').addEventListener('click',()=>deleteItem('finance',$('finance-id').value)); $('delete-habit').addEventListener('click',()=>deleteItem('habit',$('habit-id').value)); $('delete-note').addEventListener('click',()=>deleteItem('note',$('note-id').value));
-    $('quick-btn').addEventListener('click',openQuick); $('fab').addEventListener('click',openQuick); $('search-btn').addEventListener('click',openSearch); $('voice-btn').addEventListener('click',()=>{ if(speech){toast('Escuchando...'); speech.start();} else toast('Tu navegador no soporta reconocimiento de voz.'); });
+    $('quick-btn').addEventListener('click',openQuick); $('fab').addEventListener('click',openQuick); $('alarm-close')?.addEventListener('click', closeAlarmOverlay); $('alarm-primary')?.addEventListener('click',()=>{ const a=alarmCurrentActions[0]; closeAlarmOverlay(); if(a?.action) runAction(a.action, {dataset:{id:a.id||'', view:a.view||''}}); }); $('search-btn').addEventListener('click',openSearch); $('voice-btn').addEventListener('click',()=>{ if(speech){toast('Escuchando...'); speech.start();} else toast('Tu navegador no soporta reconocimiento de voz.'); });
     $('lock-btn').addEventListener('click',()=> state.settings.pinEnabled ? $('lock').classList.add('show') : toast('Activa el PIN en configuración.'));
     $('quick-unlock').addEventListener('click',()=>{$('lock').classList.remove('show'); toast('Desbloqueado visualmente');});
     $('privacy-toggle').addEventListener('click',()=>{state.settings.privacyMode=!state.settings.privacyMode; sync(); toast(state.settings.privacyMode?'Modo privacidad activo':'Modo privacidad desactivado');});
@@ -995,21 +1630,54 @@
     $('global-search-input').addEventListener('input',e=>$('global-search-results').innerHTML=doSearch(e.target.value));
     document.addEventListener('submit',e=>{ if(e.target.id==='assistant-form'){ e.preventDefault(); const inp=$('assistant-input'); if(inp.value.trim()) sendAssistant(inp.value.trim()); } if(e.target.classList.contains('captureForm')){ e.preventDefault(); const inp=e.target.querySelector('[name="capture"]'); if(inp?.value.trim()){ smartCapture(inp.value.trim()); inp.value=''; } }});
     document.body.addEventListener('click',e=>{ const ex=e.target.closest('[data-example]'); if(ex){ const input=$('capture-text'); if(input){input.value=ex.dataset.example; input.focus();} } });
-    $('onboarding-form').addEventListener('submit',e=>{e.preventDefault(); state.settings.userName=$('ob-user').value.trim()||'Usuario'; state.settings.assistantName=$('ob-assistant').value.trim()||'Jarvis'; state.settings.currency=$('ob-currency').value; state.settings.accent=$('ob-accent').value; state.settings.density=$('ob-compact').checked?'compact':'comfortable'; state.settings.pinEnabled=$('ob-pin').checked; state.settings.mode=$('ob-mode-select')?.value || qs('input[name="ob-mode"]:checked').value; state.settings.onboarded=true; $('onboarding').classList.remove('show'); sync();});
+    $('onboarding-form').addEventListener('submit',e=>{e.preventDefault(); state.settings.userName=$('ob-user').value.trim()||'Usuario'; state.settings.assistantName=$('ob-assistant').value.trim()||'Jarvis'; state.settings.currency=$('ob-currency').value; state.settings.accent=$('ob-accent').value; state.settings.useCase=$('ob-usecase')?.value || 'personal'; state.settings.density=$('ob-compact').checked?'compact':'comfortable'; state.settings.pinEnabled=$('ob-pin').checked; state.settings.mode=$('ob-mode-select')?.value || qs('input[name="ob-mode"]:checked').value; state.settings.onboarded=true; const obCase=state.settings.useCase; $('onboarding').classList.remove('show'); applyUseCase(obCase); sync();});
     document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModals(); if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();} });
-    window.addEventListener('online',applyTheme); window.addEventListener('offline',applyTheme);
+    window.addEventListener('online',applyTheme); window.addEventListener('offline',applyTheme); document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ checkAlarms(); scheduleNextAlarmCheck(); }}); window.addEventListener('pageshow',()=>{ checkAlarms(); scheduleNextAlarmCheck(); });
     updateViewportVars(); window.addEventListener('resize', updateViewportVars); window.visualViewport?.addEventListener('resize', updateViewportVars); window.visualViewport?.addEventListener('scroll', updateViewportVars);
     document.addEventListener('focusin', e => { if (e.target.matches('input, textarea, select')) setTimeout(()=>e.target.scrollIntoView({block:'center', behavior:'smooth'}), 280); }, true);
   }
 
   function registerSW() { if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 
+  function startPomTimer() {
+    stopPomTimer();
+    pomTimer = setInterval(() => {
+      if (!state.pom.running) { stopPomTimer(); return; }
+      state.pom.seconds = Math.max(0, state.pom.seconds - 1);
+      // Update display without full re-render
+      const mins = Math.floor(state.pom.seconds/60);
+      const secs = String(state.pom.seconds%60).padStart(2,'0');
+      const disp = $('pom-display');
+      const circle = $('pom-circle');
+      if (disp) disp.textContent = `${mins}:${secs}`;
+      if (circle) circle.style.setProperty('--p', Math.round((1-state.pom.seconds/state.pom.total)*100)+'%');
+      if (state.pom.seconds === 0) {
+        stopPomTimer();
+        state.pom.running = false;
+        if (state.pom.mode === 'work') {
+          state.pom.sessions++;
+          state.xp += 15;
+          toast('🍅 Pomodoro completado! +15 XP', 4000);
+          pushAlarm('pom_done_'+Date.now(), '🍅', 'Pomodoro', 'Sesión de trabajo completada. Toma un descanso.', []);
+          state.pom.mode = 'short'; state.pom.total = 300; state.pom.seconds = 300;
+        } else {
+          toast('☕ Descanso terminado. ¡A trabajar!', 3500);
+          state.pom.mode = 'work'; state.pom.total = 1500; state.pom.seconds = 1500;
+        }
+        save(); render();
+      } else {
+        save();
+      }
+    }, 1000);
+  }
+  function stopPomTimer() { if (pomTimer) { clearInterval(pomTimer); pomTimer = null; } }
+
   function init() {
     initPinPad(); bindGlobalEvents(); initSpeech(); registerSW(); applyTheme();
     if (state.settings.onboarded) $('onboarding').classList.remove('show'); else $('onboarding').classList.add('show');
     if (!state.settings.onboarded) state.view='home';
     render();
-    checkAlarms(); setInterval(checkAlarms, 60000);
+    checkAlarms(); scheduleNextAlarmCheck(); setInterval(checkAlarms, 20000);
   }
 
   window.addEventListener('DOMContentLoaded', init);

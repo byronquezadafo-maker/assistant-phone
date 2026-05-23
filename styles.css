@@ -70,3 +70,48 @@ body.modalOpen .content{overscroll-behavior:contain}
 .captureRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.captureRow .input{min-height:48px}.captureRow .btn{min-height:48px}
 .exampleChips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px}.plannerResult{margin:12px 0}.planList{display:flex;flex-direction:column;gap:8px}.planStep{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid var(--border)}.planStep b{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:var(--accentA);color:var(--accent)}.planStep span{display:flex;flex-direction:column;gap:2px}.planStep small{color:var(--muted)}.nextAction .simpleTask{margin:10px 0}.noteItem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border);border-radius:20px;padding:12px;background:rgba(255,255,255,.03)}.noteMain{text-align:left;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;min-width:0}.noteMain strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.noteMain span{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.actionGrid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
 @media(max-width:560px){.captureRow{grid-template-columns:1fr}.quickCapture{border-radius:24px}.noteItem{grid-template-columns:1fr}.noteItem>.row{justify-content:flex-start}.plannerResult{max-height:42vh;overflow:auto}}
+
+/* v9 — mejoras: voz, delete-toast, pin, pomodoro */
+.iconBtn.listening { background: rgba(255,77,109,.25); border-color: var(--danger); animation: pulse-btn .9s ease-in-out infinite; }
+@keyframes pulse-btn { 0%,100%{box-shadow:0 0 0 0 rgba(255,77,109,.4)} 50%{box-shadow:0 0 0 8px rgba(255,77,109,0)} }
+#undo-inline-btn:hover, #confirm-yes-btn:hover { opacity: .82; }
+.pomCircle { background: conic-gradient(var(--accent) var(--p,0%), var(--panel2) 0); transition: --p .5s; }
+
+/* v10: navegación “Más” y tarjetas extra limpias */
+.moreGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.moreTile{border:0;background:var(--panel);color:var(--text);border-radius:var(--radius);padding:16px;text-align:left;display:flex;flex-direction:column;gap:6px;min-height:116px;box-shadow:var(--shadow);cursor:pointer;font:inherit}
+.moreTile span{font-size:24px}
+.moreTile strong{font-size:15px}
+.moreTile small{color:var(--muted);line-height:1.35}
+.moreTile:active{transform:scale(.98)}
+@media(max-width:720px){.moreGrid{grid-template-columns:1fr 1fr}.moreTile{min-height:104px;padding:14px}}
+
+/* v11 — alarmas más visibles y compatibles con PWA */
+.alarmModal{display:none;position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);align-items:center;justify-content:center;padding:18px}
+.alarmModal.show{display:flex;animation:alarmFade .18s ease both}.alarmCard{width:min(420px,94vw);border:1px solid var(--border2);background:linear-gradient(180deg,var(--panel),var(--bg2));border-radius:30px;padding:24px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.55),0 0 0 1px var(--accentA)}.alarmIcon{width:72px;height:72px;border-radius:24px;margin:0 auto 12px;display:grid;place-items:center;font-size:38px;background:var(--accentA);box-shadow:0 0 28px var(--accentA)}.alarmCard h2{margin:0 0 8px;font-size:24px;letter-spacing:-.04em}.alarmActions{justify-content:center;margin:18px 0 12px}.alarmActions .btn{min-width:120px}@keyframes alarmFade{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+
+/* v12 adaptive product direction */
+.dayHero { border: 0; box-shadow: none; }
+.dayModeCard { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel)); }
+.daySteps { display: grid; gap: 8px; margin: 12px 0; }
+.daySteps > div { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.daySteps > div:last-child { border-bottom: 0; }
+.daySteps b { width: 28px; height: 28px; border-radius: 999px; background: var(--accentA); color: var(--accent); display: grid; place-items: center; font-size: 12px; }
+.widgetRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.softWidget { padding: 14px; border-radius: 20px; background: var(--panel); border: 1px solid var(--lineSoft); }
+.softWidget span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.softWidget strong { font-size: 18px; }
+.profileGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; margin-top: 12px; }
+.profileTile { text-align: left; border: 1px solid var(--lineSoft); background: var(--panel2); border-radius: 20px; padding: 14px; color: var(--text); cursor: pointer; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+.profileTile:hover { transform: translateY(-1px); border-color: var(--line); }
+.profileTile.active { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.profileTile span { font-size: 24px; display: block; margin-bottom: 6px; }
+.profileTile strong { display: block; font-size: 13px; }
+.profileTile small { color: var(--muted); display: block; margin-top: 4px; line-height: 1.35; }
+.compactProfiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.smallActions .actionTile { min-height: 112px; }
+@media (max-width: 560px) {
+  .profileGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profileTile { padding: 12px; border-radius: 18px; }
+  .profileTile span { font-size: 22px; }
+}
